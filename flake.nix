@@ -16,13 +16,23 @@
           buildInputs = with pkgs; [
             go
             sqlite
-            gcc # For go-sqlite3 (CGO)
+            gcc
           ];
 
-          shellHook = ''
+          shellHook = '
             echo "Minecraft Discord Bridge Development Environment"
             export CGO_ENABLED=1
-          '';
+          ';
+        };
+
+        packages.default = pkgs.buildGoModule {
+          pname = "minecraft-discord-bridge";
+          version = "0.1.0";
+          src = ./.;
+          vendorHash = "sha256-W1qCmaJkLVEfBlxvIvsGhui84HOUHcKi+boC0lvozOo=";
+
+          buildInputs = [ pkgs.sqlite ];
+          env.CGO_ENABLED = 1;
         };
       }
     );
