@@ -1,0 +1,19 @@
+[discord]
+token = "YOUR_DISCORD_BOT_TOKEN"
+admin_guild_id = "YOUR_ADMIN_GUILD_ID"
+
+[database]
+path = "./bridge.db"
+
+[bridge]
+socket_path = "/tmp/bridge.sock"
+
+[servers.nitac23s]
+network = "unix"
+address = "/run/minecraft/nitac23s.rcon"
+password = "your_rcon_password"
+
+[servers.lobby]
+network = "tcp"
+address = "127.0.0.1:25575"
+password = "your_rcon_password"
