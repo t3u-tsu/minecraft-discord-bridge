@@ -53,9 +53,12 @@ func main() {
 	// 接続開始
 	err = dg.Open()
 	if err != nil {
-		log.Fatalf("Failed to open connection: %v", err)
+		log.Printf("Failed to open Discord connection: %v", err)
+		log.Println("Continuing in local management mode...")
+	} else {
+		defer dg.Close()
+		log.Println("Discord bot is now running.")
 	}
-	defer dg.Close()
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")
 
