@@ -19,10 +19,10 @@
             gcc
           ];
 
-          shellHook = '
+          shellHook = ''
             echo "Minecraft Discord Bridge Development Environment"
             export CGO_ENABLED=1
-          ';
+          '';
         };
 
         packages.default = pkgs.buildGoModule {
