@@ -9,11 +9,8 @@ path = "./bridge.db"
 socket_path = "/tmp/bridge.sock"
 
 [servers.nitac23s]
-network = "unix"
-address = "/run/minecraft/nitac23s.rcon"
+network = "tcp" # or "unix"
+address = "127.0.0.1:25575" # or "/run/minecraft/nitac23s.rcon"
 password = "your_rcon_password"
-
-[servers.lobby]
-network = "tcp"
-address = "127.0.0.1:25575"
-password = "your_rcon_password"
+# Path to whitelist.json for reliable removal (especially for Bedrock/Offline players)
+whitelist_path = "/srv/minecraft/nitac23s/whitelist.json"

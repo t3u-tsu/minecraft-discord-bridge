@@ -10,7 +10,8 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 - **Channel Restriction**: Limit bot commands to a specific Discord channel for each linked server.
 - **Onboarding System**: Simple `/join` command to grant the required administration role to users.
 - **Link Management**: List all connected Discord guilds and unlink them remotely if necessary.
-- **Whitelist Operations**: Manage Minecraft whitelists via Discord slash commands.
+- **Whitelist Operations**: Manage whitelists via Discord slash commands.
+- **Reliable Removal**: Direct `whitelist.json` editing ensures that name-changed or Bedrock players can be removed without issues.
 - **UUID Resolution**: Automatic validation of player names via Mojang API.
 - **Local Management Socket**: Control everything from the server's command line.
 - **Auto-Migration**: Database schema updates are automatically applied on startup.
