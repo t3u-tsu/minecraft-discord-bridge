@@ -139,7 +139,7 @@ func GenerateToken(serverName string) string {
 	}
 	return "MC-" + serverName + "-" + hex.EncodeToString(b)
 }
-var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_\. ]{2,24}$`)
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_\. ]{3,20}$`)
 
 func ValidateMinecraftUsername(username string) bool {
 	return usernameRegex.MatchString(username)
