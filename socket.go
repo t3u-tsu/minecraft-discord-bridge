@@ -58,7 +58,8 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			return "Usage: invite-revoke <token>", nil
 		}
 		if err := db.RevokeInvitation(args[1]); err != nil {
-			return "", err
+			// Ensure error string is returned
+			return fmt.Sprintf("Error: %v", err), nil
 		}
 		return "Token revoked.", nil
 
@@ -70,7 +71,7 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 		srvName, action := args[1], args[2]
 		srvCfg, ok := cfg.Servers[srvName]
 		if !ok {
-			return fmt.Sprintf("Error: Server '%s' not found in config", srvName), nil
+			return fmt.Sprintf("Error: Server '%s' not found in configuration", srvName), nil
 		}
 
 		mcCommand := ""
@@ -81,7 +82,7 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			// add/remove の場合は UUID 解決を試みる (バリデーション目的)
 			_, err := ResolveUUID(username)
 			if err != nil {
-				return fmt.Sprintf("Error resolving UUID for %s: %v", username, err), nil
+				return fmt.Sprintf("Error: Failed to resolve UUID for %s: %v", username, err), nil
 			}
 			mcCommand = fmt.Sprintf("whitelist %s %s", action, username)
 		} else {

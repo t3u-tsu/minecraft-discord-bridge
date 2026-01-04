@@ -28,6 +28,8 @@ func InitDB(path string) (*Database, error) {
 	CREATE TABLE IF NOT EXISTS links (
 		guild_id TEXT PRIMARY KEY,
 		target_mc_server TEXT NOT NULL,
+		management_role_id TEXT DEFAULT '',
+		allowed_channel_id TEXT DEFAULT '',
 		linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	`
@@ -52,6 +54,15 @@ func InitDB(path string) (*Database, error) {
 		log.Println("[DB] Migrating: Adding 'management_role_id' column to links table")
 		if _, err := db.Exec("ALTER TABLE links ADD COLUMN management_role_id TEXT DEFAULT ''"); err != nil {
 			log.Printf("[DB] Error adding column 'management_role_id': %v", err)
+		}
+	}
+
+	// links テーブルに allowed_channel_id カラムがあるかチェック
+	err = db.QueryRow("SELECT count(*) FROM pragma_table_info('links') WHERE name='allowed_channel_id'").Scan(&count)
+	if err == nil && count == 0 {
+		log.Println("[DB] Migrating: Adding 'allowed_channel_id' column to links table")
+		if _, err := db.Exec("ALTER TABLE links ADD COLUMN allowed_channel_id TEXT DEFAULT ''"); err != nil {
+			log.Printf("[DB] Error adding column 'allowed_channel_id': %v", err)
 		}
 	}
 
@@ -103,8 +114,8 @@ func (d *Database) RevokeInvitation(token string) error {
 	return nil
 }
 
-// Discord サーバーをリンク (Role ID 対応)
-func (d *Database) LinkGuild(guildID, token, roleID string) (string, error) {
+// Discord サーバーをリンク (Role ID & Channel ID 対応)
+func (d *Database) LinkGuild(guildID, token, roleID, channelID string) (string, error) {
 	var targetServer string
 	err := d.db.QueryRow("SELECT target_mc_server FROM invitations WHERE token = ?", token).Scan(&targetServer)
 	if err != nil {
@@ -115,7 +126,7 @@ func (d *Database) LinkGuild(guildID, token, roleID string) (string, error) {
 	}
 
 	// リンクの作成
-	_, err = d.db.Exec("INSERT OR REPLACE INTO links (guild_id, target_mc_server, management_role_id) VALUES (?, ?, ?)", guildID, targetServer, roleID)
+	_, err = d.db.Exec("INSERT OR REPLACE INTO links (guild_id, target_mc_server, management_role_id, allowed_channel_id) VALUES (?, ?, ?, ?)", guildID, targetServer, roleID, channelID)
 	if err != nil {
 		return "", err
 	}
@@ -127,16 +138,16 @@ func (d *Database) LinkGuild(guildID, token, roleID string) (string, error) {
 }
 
 // リンク情報の取得
-func (d *Database) GetLinkInfo(guildID string) (string, string, error) {
-	var targetServer, roleID string
-	err := d.db.QueryRow("SELECT target_mc_server, management_role_id FROM links WHERE guild_id = ?", guildID).Scan(&targetServer, &roleID)
+func (d *Database) GetLinkInfo(guildID string) (string, string, string, error) {
+	var targetServer, roleID, channelID string
+	err := d.db.QueryRow("SELECT target_mc_server, management_role_id, allowed_channel_id FROM links WHERE guild_id = ?", guildID).Scan(&targetServer, &roleID, &channelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return "", "", errors.New("this guild is not linked to any Minecraft server")
+			return "", "", "", errors.New("this guild is not linked to any Minecraft server")
 		}
-		return "", "", err
+		return "", "", "", err
 	}
-	return targetServer, roleID, nil
+	return targetServer, roleID, channelID, nil
 }
 
 func (d *Database) Close() {

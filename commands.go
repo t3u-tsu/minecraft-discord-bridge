@@ -33,6 +33,12 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 					Description: "The role required to manage the Minecraft server via this bot",
 					Required:    true,
 				},
+				{
+					Type:        discordgo.ApplicationCommandOptionChannel,
+					Name:        "channel",
+					Description: "Restrict commands to this specific channel",
+					Required:    false,
+				},
 			},
 		},
 		{
@@ -148,7 +154,7 @@ func AddHandlers(s *discordgo.Session, db *Database, cfg *Config) {
 }
 
 func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
-	_, roleID, err := db.GetLinkInfo(i.GuildID)
+	_, roleID, _, err := db.GetLinkInfo(i.GuildID)
 	if err != nil || roleID == "" {
 		respondWithError(s, i, "This server is not properly linked or no management role is configured.")
 		return
@@ -167,25 +173,40 @@ func handleLink(s *discordgo.Session, i *discordgo.InteractionCreate, db *Databa
 	options := i.ApplicationCommandData().Options
 	token := options[0].StringValue()
 	role := options[1].RoleValue(s, i.GuildID)
+	
+	channelID := ""
+	if len(options) > 2 {
+		channelID = options[2].ChannelValue(s).ID
+	}
 
-	targetServer, err := db.LinkGuild(i.GuildID, token, role.ID)
+	targetServer, err := db.LinkGuild(i.GuildID, token, role.ID, channelID)
 	if err != nil {
 		respondWithError(s, i, err.Error())
 		return
 	}
 
-	respondWithSuccess(s, i, fmt.Sprintf("✅ Linked to **%s**. Management role set to <@&%s>.", targetServer, role.ID))
+	msg := fmt.Sprintf("✅ Linked to **%s**. Management role: <@&%s>.", targetServer, role.ID)
+	if channelID != "" {
+		msg += fmt.Sprintf(" Commands are restricted to <#%s>.", channelID)
+	}
+	respondWithSuccess(s, i, msg)
 }
 
 func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
 	// 1. サーバーがリンクされているか確認
-	targetServer, roleID, err := db.GetLinkInfo(i.GuildID)
+	targetServer, roleID, allowedChannelID, err := db.GetLinkInfo(i.GuildID)
 	if err != nil {
 		respondWithError(s, i, "This Discord server is not linked to any Minecraft server. Use `/bridge-link` first.")
 		return
 	}
 
-	// 2. 管理ロールを持っているかチェック
+	// 2. チャンネル制限のチェック
+	if allowedChannelID != "" && i.ChannelID != allowedChannelID {
+		respondWithError(s, i, fmt.Sprintf("This command can only be used in <#%s>.", allowedChannelID))
+		return
+	}
+
+	// 3. 管理ロールを持っているかチェック
 	if roleID != "" {
 		hasRole := false
 		for _, r := range i.Member.Roles {
@@ -200,9 +221,8 @@ func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *D
 		}
 	}
 
-	// 3. 共通ロジック (socketと同一) を呼び出すための文字列を生成
+	// 4. 共通ロジック (socketと同一) を呼び出すための文字列を生成
 	sub := i.ApplicationCommandData().Options[0]
-	
 	cmdText := ""
 	if sub.Name == "list" {
 		cmdText = fmt.Sprintf("whitelist %s list", targetServer)
@@ -248,7 +268,7 @@ func handleTokenCommands(s *discordgo.Session, i *discordgo.InteractionCreate, d
 	cmdText := ""
 	switch sub.Name {
 	case "create":
-		cmdText = fmt.Sprintf("invite-create %s %s", sub.Options[1].StringValue(), sub.Options[0].StringValue())
+		cmdText = fmt.Sprintf("invite-create %s %s", sub.Options[0].StringValue(), sub.Options[1].StringValue())
 	case "list":
 		cmdText = "invite-list"
 	case "revoke":
