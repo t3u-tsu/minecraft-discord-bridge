@@ -86,7 +86,7 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 		}
 	}
 
-	if AdminGuildID != "" {
+	if guildID != "" {
 		for _, v := range adminCommands {
 			_, err := s.ApplicationCommandCreate(s.State.User.ID, AdminGuildID, v)
 			if err != nil {
