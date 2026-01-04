@@ -8,6 +8,7 @@ NixOS 運用に最適化された、Go 製の汎用 Minecraft Discord 連携ツ�
 - **マルチテナント管理**: 招待トークン方式で、複数の Discord サーバーから特定のマイクラ鯖を安全に管理。
 - **名前付き招待**: どのトークンを誰に渡したか名前を付けて管理可能。
 - **ロールベースの権限管理**: リンク時に「管理ロール」を指定し、そのロール保持者のみがコマンドを実行可能。
+- **チャンネル制限**: コマンドを実行できる Discord チャンネルを特定の場所に限定可能。
 - **参加表明システム**: `/join` コマンドで、一般ユーザーに管理ロールを自動付与。
 - **ホワイトリスト操作**: Discord スラッシュコマンド (`/whitelist add|remove|list`)。
 - **UUID 解決**: Mojang API によるプレイヤー名と UUID の自動検証。
@@ -37,7 +38,7 @@ NixOS 運用に最適化された、Go 製の汎用 Minecraft Discord 連携ツ�
 1. 管理サーバー（またはソケット）でトークンを発行:
    `/token create server:nitac23s name:管理チームA`
 2. 管理を任せたいサーバーでリンクを実行:
-   `/bridge-link token:<トークン> role:@管理者ロール`
+   `/bridge-link token:<トークン> role:@管理者ロール [channel:#チャンネル]`
 3. 以降、そのサーバーのユーザーは `/join` でロールを受け取り、マイクラを管理できます。
 
 ---
@@ -45,10 +46,11 @@ NixOS 運用に最適化された、Go 製の汎用 Minecraft Discord 連携ツ�
 ## コマンド一覧
 
 ### Discord スラッシュコマンド
+- `/help`: 使い方を表示。
 - `/token create <srv> <name>`: [管理サーバー限定] 名前付きトークンを発行。
 - `/token list`: [管理サーバー限定] 有効なトークンを一覧表示。
 - `/token revoke <token>`: [管理サーバー限定] トークンを失効させる。
-- `/bridge-link <token> <role>`: Discord サーバーとマイクラ鯖を紐付け、管理ロールを指定。
+- `/bridge-link <token> <role> [channel]`: Discord サーバーとマイクラ鯖を紐付け。
 - `/join`: 設定された管理ロールを取得。
 - `/whitelist <add|remove|list>`: ホワイトリストを操作。
 

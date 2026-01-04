@@ -14,6 +14,10 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 	// グローバルコマンド
 	globalCommands := []*discordgo.ApplicationCommand{
 		{
+			Name:        "help",
+			Description: "Show usage instructions for Minecraft Discord Bridge",
+		},
+		{
 			Name:        "join",
 			Description: "Join the Minecraft server and get the member role",
 		},
@@ -141,6 +145,8 @@ func AddHandlers(s *discordgo.Session, db *Database, cfg *Config) {
 
 		data := i.ApplicationCommandData()
 		switch data.Name {
+		case "help":
+			handleHelp(s, i)
 		case "join":
 			handleJoin(s, i, db)
 		case "bridge-link":
@@ -150,6 +156,38 @@ func AddHandlers(s *discordgo.Session, db *Database, cfg *Config) {
 		case "token":
 			handleTokenCommands(s, i, db, cfg)
 		}
+	})
+}
+
+func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	embed := &discordgo.MessageEmbed{
+		Title:       "Minecraft Discord Bridge Help",
+		Description: "A multi-tenant Minecraft management tool for Discord.",
+		Color:       0x00ff00,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:  "For Users",
+				Value: "`/join`: Get the required role to manage the server.",
+			},
+			{
+				Name:  "For Server Admins",
+				Value: "`/bridge-link <token> <role> [channel]`: Link this server to a Minecraft server.\n`/whitelist <add|remove|list>`: Manage players (requires management role).",
+			},
+			{
+				Name:  "GitHub Repository",
+				Value: "[t3u-tsu/minecraft-discord-bridge](https://github.com/t3u-tsu/minecraft-discord-bridge)",
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Powered by NixOS & Go",
+		},
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+		},
 	})
 }
 
