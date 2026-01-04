@@ -12,6 +12,7 @@ var (
 )
 
 func RegisterCommands(s *discordgo.Session, guildID string) {
+	AdminGuildID = guildID
 	commands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "bridge-link",
@@ -200,6 +201,10 @@ func respondWithError(s *discordgo.Session, i *discordgo.InteractionCreate, msg 
 }
 
 func handleInviteCreate(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
+	if i.GuildID != AdminGuildID {
+		respondWithError(s, i, "This command can only be used in the admin server.")
+		return
+	}
 	// 権限チェックは RegisterCommands 側の Guild 制限で行っているが
 	// 追加でユーザーIDチェックなども入れるとより安全
 	serverName := i.ApplicationCommandData().Options[0].StringValue()
