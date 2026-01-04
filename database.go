@@ -28,8 +28,6 @@ func InitDB(path string) (*Database, error) {
 	CREATE TABLE IF NOT EXISTS links (
 		guild_id TEXT PRIMARY KEY,
 		target_mc_server TEXT NOT NULL,
-		management_role_id TEXT DEFAULT '',
-		allowed_channel_id TEXT DEFAULT '',
 		linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	`
@@ -38,7 +36,6 @@ func InitDB(path string) (*Database, error) {
 	}
 
 	// --- マイグレーションロジック ---
-	// invitations テーブルに name カラムがあるかチェック
 	var count int
 	err = db.QueryRow("SELECT count(*) FROM pragma_table_info('invitations') WHERE name='name'").Scan(&count)
 	if err == nil && count == 0 {
@@ -48,7 +45,6 @@ func InitDB(path string) (*Database, error) {
 		}
 	}
 
-	// links テーブルに management_role_id カラムがあるかチェック
 	err = db.QueryRow("SELECT count(*) FROM pragma_table_info('links') WHERE name='management_role_id'").Scan(&count)
 	if err == nil && count == 0 {
 		log.Println("[DB] Migrating: Adding 'management_role_id' column to links table")
@@ -57,7 +53,6 @@ func InitDB(path string) (*Database, error) {
 		}
 	}
 
-	// links テーブルに allowed_channel_id カラムがあるかチェック
 	err = db.QueryRow("SELECT count(*) FROM pragma_table_info('links') WHERE name='allowed_channel_id'").Scan(&count)
 	if err == nil && count == 0 {
 		log.Println("[DB] Migrating: Adding 'allowed_channel_id' column to links table")
@@ -74,7 +69,6 @@ func InitDB(path string) (*Database, error) {
 	return &Database{db: db}, nil
 }
 
-// 招待トークンの作成 (名前付き)
 func (d *Database) CreateInvitation(token, targetServer, name string) error {
 	_, err := d.db.Exec("INSERT INTO invitations (token, target_mc_server, name) VALUES (?, ?, ?)", token, targetServer, name)
 	return err
@@ -87,7 +81,6 @@ type Invitation struct {
 	CreatedAt    string
 }
 
-// 招待トークンの一覧取得
 func (d *Database) ListInvitations() ([]Invitation, error) {
 	rows, err := d.db.Query("SELECT token, target_mc_server, name, created_at FROM invitations")
 	if err != nil {
@@ -106,7 +99,6 @@ func (d *Database) ListInvitations() ([]Invitation, error) {
 	return list, nil
 }
 
-// トークンの失効
 func (d *Database) RevokeInvitation(token string) error {
 	res, err := d.db.Exec("DELETE FROM invitations WHERE token = ?", token)
 	if err != nil {
@@ -119,7 +111,6 @@ func (d *Database) RevokeInvitation(token string) error {
 	return nil
 }
 
-// Discord サーバーをリンク (Role ID & Channel ID 対応)
 func (d *Database) LinkGuild(guildID, token, roleID, channelID string) (string, error) {
 	var targetServer string
 	err := d.db.QueryRow("SELECT target_mc_server FROM invitations WHERE token = ?", token).Scan(&targetServer)
@@ -130,19 +121,27 @@ func (d *Database) LinkGuild(guildID, token, roleID, channelID string) (string, 
 		return "", err
 	}
 
-	// リンクの作成
 	_, err = d.db.Exec("INSERT OR REPLACE INTO links (guild_id, target_mc_server, management_role_id, allowed_channel_id) VALUES (?, ?, ?, ?)", guildID, targetServer, roleID, channelID)
 	if err != nil {
 		return "", err
 	}
 
-	// 使用済みトークンの削除
-	_, _ = d.db.Exec("DELETE FROM invitations WHERE token = ?", token)
-
+	// 注: トークンは削除せず、永続的に残すように変更しました
 	return targetServer, nil
 }
 
-// リンク情報の取得
+func (d *Database) UnlinkGuild(guildID string) error {
+	res, err := d.db.Exec("DELETE FROM links WHERE guild_id = ?", guildID)
+	if err != nil {
+		return err
+	}
+	count, _ := res.RowsAffected()
+	if count == 0 {
+		return errors.New("guild link not found")
+	}
+	return nil
+}
+
 func (d *Database) GetLinkInfo(guildID string) (string, string, string, error) {
 	var targetServer, roleID, channelID string
 	err := d.db.QueryRow("SELECT target_mc_server, management_role_id, allowed_channel_id FROM links WHERE guild_id = ?", guildID).Scan(&targetServer, &roleID, &channelID)

@@ -63,6 +63,15 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 		}
 		return "Token revoked.", nil
 
+	case "unlink":
+		if len(args) < 2 {
+			return "Usage: unlink <guild_id>", nil
+		}
+		if err := db.UnlinkGuild(args[1]); err != nil {
+			return fmt.Sprintf("Error: %v", err), nil
+		}
+		return "Guild unlinked.", nil
+
 	case "links":
 		list, err := db.ListLinks()
 		if err != nil {

@@ -131,6 +131,30 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 				},
 			},
 		},
+		{
+			Name:        "links",
+			Description: "Manage linked Discord servers",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "list",
+					Description: "List all linked Discord servers",
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "unlink",
+					Description: "Unlink a Discord server",
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "guild_id",
+							Description: "Guild ID to unlink",
+							Required:    true,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	log.Printf("[DISCORD] Refreshing commands (clearing first)...")
@@ -181,6 +205,8 @@ func AddHandlers(s *discordgo.Session, db *Database, cfg *Config) {
 			handleWhitelist(s, i, db, cfg)
 		case "token":
 			handleTokenCommands(s, i, db, cfg)
+		case "links":
+			handleLinksCommands(s, i, db, cfg)
 		}
 	})
 }
@@ -197,7 +223,7 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			},
 			{
 				Name:  "For Server Admins",
-				Value: "`/bridge-link <token> <role> [channel]`: Link this server to a Minecraft server.\n				`/whitelist <add|remove|list>`: Manage players (requires management role).",
+				Value: "`/bridge-link <token> <role> [channel]`: Link this server to a Minecraft server.\n`/whitelist <add|remove|list>`: Manage players (requires management role).",
 			},
 			{
 				Name:  "GitHub Repository",
@@ -217,7 +243,6 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 }
 
-// 参加表明コマンド: 管理ロールを付与する
 func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
 	_, roleID, _, err := db.GetLinkInfo(i.GuildID)
 	log.Printf("[DISCORD] handleJoin: GuildID='%s', UserID='%s', RoleID='%s'", i.GuildID, i.Member.User.ID, roleID)
@@ -313,7 +338,6 @@ func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *D
 	if sub.Name == "list" {
 		cmdText = fmt.Sprintf("whitelist %s list", targetServer)
 	} else {
-		// サブコマンドのオプションからユーザー名を取得
 		username := ""
 		if len(sub.Options) > 0 {
 			username = sub.Options[0].StringValue()
@@ -331,7 +355,6 @@ func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *D
 }
 
 func handleTokenCommands(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
-	log.Printf("[DISCORD] Checking AdminGuildID for '/token' command. Got: '%s', Expected: '%s'", i.GuildID, AdminGuildID)
 	if i.GuildID != AdminGuildID {
 		respondWithError(s, i, "This command can only be used in the admin server.")
 		return
@@ -364,6 +387,29 @@ func handleTokenCommands(s *discordgo.Session, i *discordgo.InteractionCreate, d
 		respondWithError(s, i, err.Error())
 	} else {
 		log.Printf("[DISCORD] Successfully processed token command")
+		respondWithSuccess(s, i, resp)
+	}
+}
+
+func handleLinksCommands(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
+	if i.GuildID != AdminGuildID {
+		respondWithError(s, i, "This command can only be used in the admin server.")
+		return
+	}
+
+	sub := i.ApplicationCommandData().Options[0]
+	cmdText := ""
+	switch sub.Name {
+	case "list":
+		cmdText = "links"
+	case "unlink":
+		cmdText = fmt.Sprintf("unlink %s", sub.Options[0].StringValue())
+	}
+
+	resp, err := ProcessCommand(cmdText, db, cfg)
+	if err != nil {
+		respondWithError(s, i, err.Error())
+	} else {
 		respondWithSuccess(s, i, resp)
 	}
 }
