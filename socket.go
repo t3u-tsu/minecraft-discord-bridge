@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"bufio"
 	"fmt"
 	"log"
@@ -107,18 +108,67 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			if !ValidateMinecraftUsername(username) {
 				return fmt.Sprintf("Error: Invalid Minecraft username: %s", username), nil
 			}
+			if action == "list" {
+			mcCommand = "whitelist list"
+		} else if len(args) >= 4 {
+			username := args[3]
+			if !ValidateMinecraftUsername(username) {
+				return fmt.Sprintf("Error: Invalid Minecraft username: %s", username), nil
+			}
+
 			if action == "add" {
-				// Java版ユーザー（ドットで始まらない）の場合のみバリデーションとして UUID 解決を試みる
+				// Java版ユーザーの場合のみ UUID 解決を試みる
 				if !strings.HasPrefix(username, ".") {
 					if _, err := ResolveUUID(username); err != nil {
 						return fmt.Sprintf("Error: Failed to resolve UUID for %s: %v", username, err), nil
 					}
 				}
+				mcCommand = fmt.Sprintf("whitelist add %s", username)
+			} else if action == "remove" {
+				// --- JSON 直接編集ロジック ---
+				if srvCfg.WhitelistPath == "" {
+					return "Error: whitelist_path is not configured for this server", nil
+				}
+
+				// 1. 読み込み
+				data, err := os.ReadFile(srvCfg.WhitelistPath)
+				if err != nil {
+					return fmt.Sprintf("Error reading whitelist: %v", err), nil
+				}
+
+				var list []WhitelistEntry
+				if err := json.Unmarshal(data, &list); err != nil {
+					return fmt.Sprintf("Error parsing whitelist: %v", err), nil
+				}
+
+				// 2. 削除
+				newList := make([]WhitelistEntry, 0)
+				found := false
+				for _, entry := range list {
+					if strings.EqualFold(entry.Name, username) {
+						found = true
+						continue
+					}
+					newList = append(newList, entry)
+				}
+
+				if !found {
+					return "Error: That player does not exist in the whitelist file", nil
+				}
+
+				// 3. 保存
+				newData, err := json.MarshalIndent(newList, "", "  ")
+				if err != nil {
+					return fmt.Sprintf("Error encoding whitelist: %v", err), nil
+				}
+
+				if err := os.WriteFile(srvCfg.WhitelistPath, newData, 0644); err != nil {
+					return fmt.Sprintf("Error writing whitelist: %v", err), nil
+				}
+
+				// 4. リロードコマンドをセット
+				mcCommand = "whitelist reload"
 			}
-			// remove の場合は名前変更等に対応するため UUID 解決をスキップして直接命令を送る
-			mcCommand = fmt.Sprintf("whitelist %s \"%s\"", action, username)
-			log.Printf("[RCON] Sending command: %s", mcCommand)
-			log.Printf("[RCON] Sending command: %s", mcCommand)
 		} else {
 			return "Error: Username required for add/remove", nil
 		}
@@ -184,4 +234,8 @@ func getServerNames(cfg *Config) []string {
 		names = append(names, k)
 	}
 	return names
+}
+type WhitelistEntry struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
 }
