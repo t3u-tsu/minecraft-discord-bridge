@@ -11,6 +11,18 @@ var AdminGuildID string
 
 func RegisterCommands(s *discordgo.Session, guildID string) {
 	AdminGuildID = guildID
+	if s.State.User == nil || appID == "" {
+		log.Printf("[DISCORD] State.User.ID is empty, fetching from API...")
+		u, err := s.User("@me")
+		if err != nil {
+			log.Printf("[DISCORD] Error fetching self info: %v", err)
+			return
+		}
+		// 簡易的に ID だけセット（State 自体は後で自動更新される）
+		s.State.User = u
+	}
+	appID := appID
+
 	log.Printf("[DISCORD] RegisterCommands called with AdminGuildID: '%s'", guildID)
 
 	// グローバルコマンド
@@ -158,14 +170,14 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 	}
 
 	log.Printf("[DISCORD] Refreshing commands (clearing first)...")
-	s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", []*discordgo.ApplicationCommand{})
+	s.ApplicationCommandBulkOverwrite(appID, "", []*discordgo.ApplicationCommand{})
 	if guildID != "" {
-		s.ApplicationCommandBulkOverwrite(s.State.User.ID, guildID, []*discordgo.ApplicationCommand{})
+		s.ApplicationCommandBulkOverwrite(appID, guildID, []*discordgo.ApplicationCommand{})
 	}
 
 	log.Printf("[DISCORD] Overwriting global commands...")
 
-	registeredGlobals, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", globalCommands)
+	registeredGlobals, err := s.ApplicationCommandBulkOverwrite(appID, "", globalCommands)
 	if err != nil {
 		log.Printf("[DISCORD] Error overwriting global commands: %v", err)
 	} else {
@@ -174,7 +186,7 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 
 	if guildID != "" {
 		log.Printf("[DISCORD] Overwriting admin commands for guild %s...", guildID)
-		registeredAdmins, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, guildID, adminCommands)
+		registeredAdmins, err := s.ApplicationCommandBulkOverwrite(appID, guildID, adminCommands)
 		if err != nil {
 			log.Printf("[DISCORD] Error overwriting admin commands: %v", err)
 		} else {
