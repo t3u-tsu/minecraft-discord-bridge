@@ -218,8 +218,8 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
-	log.Printf("[DISCORD] handleJoin: GuildID='%s', UserID='%s', RoleID='%s'", i.GuildID, i.Member.User.ID, roleID)
 	_, roleID, _, err := db.GetLinkInfo(i.GuildID)
+	log.Printf("[DISCORD] handleJoin: GuildID='%s', UserID='%s', RoleID='%s'", i.GuildID, i.Member.User.ID, roleID)
 	if err != nil || roleID == "" {
 		respondWithError(s, i, "This server is not properly linked or no management role is configured.")
 		return
@@ -227,6 +227,7 @@ func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Databa
 
 	err = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, roleID)
 	if err != nil {
+		log.Printf("[DISCORD] Error adding role: %v", err)
 		respondWithError(s, i, fmt.Sprintf("Failed to assign role: %v", err))
 		return
 	}
