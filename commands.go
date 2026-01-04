@@ -133,7 +133,6 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 		},
 	}
 
-	
 	log.Printf("[DISCORD] Refreshing commands (clearing first)...")
 	s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", []*discordgo.ApplicationCommand{})
 	if guildID != "" {
@@ -141,6 +140,7 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 	}
 
 	log.Printf("[DISCORD] Overwriting global commands...")
+
 	registeredGlobals, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", globalCommands)
 	if err != nil {
 		log.Printf("[DISCORD] Error overwriting global commands: %v", err)
@@ -197,7 +197,7 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			},
 			{
 				Name:  "For Server Admins",
-				Value: "`/bridge-link <token> <role> [channel]`: Link this server to a Minecraft server.\n`/whitelist <add|remove|list>`: Manage players (requires management role).",
+				Value: "`/bridge-link <token> <role> [channel]`: Link this server to a Minecraft server.\n				`/whitelist <add|remove|list>`: Manage players (requires management role).",
 			},
 			{
 				Name:  "GitHub Repository",
@@ -252,21 +252,26 @@ func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Databa
 
 func handleLink(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
 	options := i.ApplicationCommandData().Options
-	token := options[0].StringValue()
-	role := options[1].RoleValue(s, i.GuildID)
-	
-	channelID := ""
-	if len(options) > 2 {
-		channelID = options[2].ChannelValue(s).ID
+	var token, roleID, channelID string
+
+	for _, opt := range options {
+		switch opt.Name {
+		case "token":
+			token = opt.StringValue()
+		case "role":
+			roleID = opt.RoleValue(s, i.GuildID).ID
+		case "channel":
+			channelID = opt.ChannelValue(s).ID
+		}
 	}
 
-	targetServer, err := db.LinkGuild(i.GuildID, token, role.ID, channelID)
+	targetServer, err := db.LinkGuild(i.GuildID, token, roleID, channelID)
 	if err != nil {
 		respondWithError(s, i, err.Error())
 		return
 	}
 
-	msg := fmt.Sprintf("✅ Linked to **%s**. Management role: <@&%s>.", targetServer, role.ID)
+	msg := fmt.Sprintf("✅ Linked to **%s**. Management role: <@&%s>.", targetServer, roleID)
 	if channelID != "" {
 		msg += fmt.Sprintf(" Commands are restricted to <#%s>.", channelID)
 	}
@@ -308,9 +313,15 @@ func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *D
 	if sub.Name == "list" {
 		cmdText = fmt.Sprintf("whitelist %s list", targetServer)
 	} else {
-		cmdText = fmt.Sprintf("whitelist %s %s %s", targetServer, sub.Name, sub.Options[0].StringValue())
+		// サブコマンドのオプションからユーザー名を取得
+		username := ""
+		if len(sub.Options) > 0 {
+			username = sub.Options[0].StringValue()
+		}
+		cmdText = fmt.Sprintf("whitelist %s %s %s", targetServer, sub.Name, username)
 	}
 
+	log.Printf("[DISCORD] Generated command text: '%s'", cmdText)
 	resp, err := ProcessCommand(cmdText, db, cfg)
 	if err != nil {
 		respondWithError(s, i, err.Error())
@@ -331,17 +342,22 @@ func handleTokenCommands(s *discordgo.Session, i *discordgo.InteractionCreate, d
 	cmdText := ""
 	switch sub.Name {
 	case "create":
-		if len(sub.Options) < 2 {
-			respondWithError(s, i, "Missing arguments.")
-			return
+		var server, name string
+		for _, opt := range sub.Options {
+			if opt.Name == "server" {
+				server = opt.StringValue()
+			} else if opt.Name == "name" {
+				name = opt.StringValue()
+			}
 		}
-		cmdText = fmt.Sprintf("invite-create %s %s", sub.Options[0].StringValue(), sub.Options[1].StringValue())
+		cmdText = fmt.Sprintf("invite-create %s %s", server, name)
 	case "list":
 		cmdText = "invite-list"
 	case "revoke":
 		cmdText = fmt.Sprintf("invite-revoke %s", sub.Options[0].StringValue())
 	}
 
+	log.Printf("[DISCORD] Generated admin command text: '%s'", cmdText)
 	resp, err := ProcessCommand(cmdText, db, cfg)
 	if err != nil {
 		log.Printf("[DISCORD] Error processing token command: %v", err)
