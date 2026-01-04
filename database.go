@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"log"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -17,24 +18,41 @@ func InitDB(path string) (*Database, error) {
 		return nil, err
 	}
 
-	// テーブルの作成（name と management_role_id を追加）
+	// 初期テーブル作成
 	query := `
 	CREATE TABLE IF NOT EXISTS invitations (
 		token TEXT PRIMARY KEY,
 		target_mc_server TEXT NOT NULL,
-		name TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS links (
 		guild_id TEXT PRIMARY KEY,
 		target_mc_server TEXT NOT NULL,
-		management_role_id TEXT DEFAULT '',
 		linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	`
-	_, err = db.Exec(query)
-	if err != nil {
+	if _, err := db.Exec(query); err != nil {
 		return nil, err
+	}
+
+	// --- マイグレーションロジック ---
+	// invitations テーブルに name カラムがあるかチェック
+	var count int
+	err = db.QueryRow("SELECT count(*) FROM pragma_table_info('invitations') WHERE name='name'").Scan(&count)
+	if err == nil && count == 0 {
+		log.Println("[DB] Migrating: Adding 'name' column to invitations table")
+		if _, err := db.Exec("ALTER TABLE invitations ADD COLUMN name TEXT DEFAULT ''"); err != nil {
+			log.Printf("[DB] Error adding column 'name': %v", err)
+		}
+	}
+
+	// links テーブルに management_role_id カラムがあるかチェック
+	err = db.QueryRow("SELECT count(*) FROM pragma_table_info('links') WHERE name='management_role_id'").Scan(&count)
+	if err == nil && count == 0 {
+		log.Println("[DB] Migrating: Adding 'management_role_id' column to links table")
+		if _, err := db.Exec("ALTER TABLE links ADD COLUMN management_role_id TEXT DEFAULT ''"); err != nil {
+			log.Printf("[DB] Error adding column 'management_role_id': %v", err)
+		}
 	}
 
 	return &Database{db: db}, nil
