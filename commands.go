@@ -77,36 +77,45 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 	// 管理者用コマンド
 	adminCommands := []*discordgo.ApplicationCommand{
 		{
-			Name:        "invite-create",
-			Description: "Generate a new invitation token",
+			Name:        "token",
+			Description: "Manage invitation tokens",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "server",
-					Description: "Minecraft server name",
-					Required:    true,
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "create",
+					Description: "Generate a new invitation token",
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "server",
+							Description: "Minecraft server name",
+							Required:    true,
+						},
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "name",
+							Description: "Name for this invitation",
+							Required:    true,
+						},
+					},
 				},
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "Name for this invitation",
-					Required:    true,
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "list",
+					Description: "List all active invitation tokens",
 				},
-			},
-		},
-		{
-			Name:        "invite-list",
-			Description: "List all active invitation tokens",
-		},
-		{
-			Name:        "invite-revoke",
-			Description: "Revoke an invitation token",
-			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "token",
-					Description: "Token to revoke",
-					Required:    true,
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "revoke",
+					Description: "Revoke an invitation token",
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "token",
+							Description: "Token to revoke",
+							Required:    true,
+						},
+					},
 				},
 			},
 		},
@@ -132,13 +141,12 @@ func AddHandlers(s *discordgo.Session, db *Database, cfg *Config) {
 			handleLink(s, i, db)
 		case "whitelist":
 			handleWhitelist(s, i, db, cfg)
-		case "invite-create", "invite-list", "invite-revoke":
-			handleAdminCommands(s, i, db, cfg)
+		case "token":
+			handleTokenCommands(s, i, db, cfg)
 		}
 	})
 }
 
-// 参加表明コマンド: 管理ロールを付与する
 func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
 	_, roleID, err := db.GetLinkInfo(i.GuildID)
 	if err != nil || roleID == "" {
@@ -170,9 +178,15 @@ func handleLink(s *discordgo.Session, i *discordgo.InteractionCreate, db *Databa
 }
 
 func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
-	// 管理ロールを持っているかチェック
-	_, roleID, err := db.GetLinkInfo(i.GuildID)
-	if err == nil && roleID != "" {
+	// 1. サーバーがリンクされているか確認
+	targetServer, roleID, err := db.GetLinkInfo(i.GuildID)
+	if err != nil {
+		respondWithError(s, i, "This Discord server is not linked to any Minecraft server. Use `/bridge-link` first.")
+		return
+	}
+
+	// 2. 管理ロールを持っているかチェック
+	if roleID != "" {
 		hasRole := false
 		for _, r := range i.Member.Roles {
 			if r == roleID {
@@ -186,9 +200,8 @@ func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *D
 		}
 	}
 
-	// 共通ロジック (socketと同一) を呼び出すための文字列を生成
+	// 3. 共通ロジック (socketと同一) を呼び出すための文字列を生成
 	sub := i.ApplicationCommandData().Options[0]
-	targetServer, _, _ := db.GetLinkInfo(i.GuildID)
 	
 	cmdText := ""
 	if sub.Name == "list" {
@@ -215,6 +228,31 @@ func handleAdminCommands(s *discordgo.Session, i *discordgo.InteractionCreate, d
 	cmdText := data.Name
 	for _, opt := range data.Options {
 		cmdText += " " + opt.StringValue()
+	}
+
+	resp, err := ProcessCommand(cmdText, db, cfg)
+	if err != nil {
+		respondWithError(s, i, err.Error())
+	} else {
+		respondWithSuccess(s, i, resp)
+	}
+}
+
+func handleTokenCommands(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
+	if i.GuildID != AdminGuildID {
+		respondWithError(s, i, "This command can only be used in the admin server.")
+		return
+	}
+
+	sub := i.ApplicationCommandData().Options[0]
+	cmdText := ""
+	switch sub.Name {
+	case "create":
+		cmdText = fmt.Sprintf("invite-create %s %s", sub.Options[1].StringValue(), sub.Options[0].StringValue())
+	case "list":
+		cmdText = "invite-list"
+	case "revoke":
+		cmdText = fmt.Sprintf("invite-revoke %s", sub.Options[0].StringValue())
 	}
 
 	resp, err := ProcessCommand(cmdText, db, cfg)
