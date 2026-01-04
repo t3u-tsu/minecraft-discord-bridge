@@ -20,6 +20,7 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 
 	command := args[0]
 	log.Printf("[CORE] Processing command: %s", input)
+	log.Printf("[CORE] Full command string to send: %q", input)
 
 	switch command {
 	case "invite-create":
