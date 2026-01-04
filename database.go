@@ -92,8 +92,15 @@ func (d *Database) ListInvitations() ([]Invitation, error) {
 
 // トークンの失効
 func (d *Database) RevokeInvitation(token string) error {
-	_, err := d.db.Exec("DELETE FROM invitations WHERE token = ?", token)
-	return err
+	res, err := d.db.Exec("DELETE FROM invitations WHERE token = ?", token)
+	if err != nil {
+		return err
+	}
+	count, _ := res.RowsAffected()
+	if count == 0 {
+		return errors.New("invitation token not found")
+	}
+	return nil
 }
 
 // Discord サーバーをリンク (Role ID 対応)
