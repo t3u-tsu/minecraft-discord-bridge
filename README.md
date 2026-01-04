@@ -21,7 +21,7 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 ### 1. Create a Discord Bot
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
 2. Create an application and navigate to the **Bot** tab.
-3. Enable **Server Members Intent** under Privileged Gateway Intents (required for role assignment).
+3. **Important**: Enable **Server Members Intent** under Privileged Gateway Intents.
 
 ### 2. Invite the Bot
 1. Use the **OAuth2 URL Generator**.
@@ -32,7 +32,7 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 1. Configure `config.toml` and start the binary.
 2. Issue a token on your admin server: `/token create server:nitac23s name:AdminTeamA`
 3. Link a target server: `/bridge-link token:<TOKEN> role:@AdminRole [channel:#channel]`
-4. Users in that server can now use `/join` to start managing the whitelist.
+4. **Important**: In your Discord server settings, ensure the bot's own role (e.g., `minecraft-bridge`) is positioned **above** the management role.
 
 ---
 

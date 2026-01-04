@@ -23,7 +23,7 @@ NixOS 運用に最適化された、Go 製の汎用 Minecraft Discord 連携ツ�
 1. [Discord Developer Portal](https://discord.com/developers/applications) にアクセス。
 2. **New Application** を作成し、左メニューの **Bot** を選択。
 3. **Reset Token** を押してトークンを取得。
-4. **Privileged Gateway Intents** で `Server Members Intent` を ON にします（ロール付与に必要）。
+4. **Privileged Gateway Intents** で `Server Members Intent` を **必ず ON** にします。
 
 ### 2. Bot の招待
 1. **OAuth2 -> URL Generator** を開きます。
@@ -39,7 +39,7 @@ NixOS 運用に最適化された、Go 製の汎用 Minecraft Discord 連携ツ�
    `/token create server:nitac23s name:管理チームA`
 2. 管理を任せたいサーバーでリンクを実行:
    `/bridge-link token:<トークン> role:@管理者ロール [channel:#チャンネル]`
-3. 以降、そのサーバーのユーザーは `/join` でロールを受け取り、マイクラを管理できます。
+3. **重要**: サーバーのロール設定で、Bot 自身のロール（`minecraft-bridge` 等）を、**管理ロールよりも上に配置**してください。
 
 ---
 

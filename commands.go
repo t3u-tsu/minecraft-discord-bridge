@@ -217,11 +217,26 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 }
 
+// 参加表明コマンド: 管理ロールを付与する
 func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
 	_, roleID, _, err := db.GetLinkInfo(i.GuildID)
 	log.Printf("[DISCORD] handleJoin: GuildID='%s', UserID='%s', RoleID='%s'", i.GuildID, i.Member.User.ID, roleID)
 	if err != nil || roleID == "" {
 		respondWithError(s, i, "This server is not properly linked or no management role is configured.")
+		return
+	}
+
+	// 既にロールを持っているかチェック
+	hasRole := false
+	for _, r := range i.Member.Roles {
+		if r == roleID {
+			hasRole = true
+			break
+		}
+	}
+
+	if hasRole {
+		respondWithSuccess(s, i, fmt.Sprintf("ℹ️ You already have the <@&%s> role.", roleID))
 		return
 	}
 
