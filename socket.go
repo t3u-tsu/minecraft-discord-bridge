@@ -116,7 +116,8 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 				}
 			}
 			// remove の場合は名前変更等に対応するため UUID 解決をスキップして直接命令を送る
-			mcCommand = fmt.Sprintf("whitelist %s "%s"", action, username)
+			mcCommand = fmt.Sprintf("whitelist %s \"%s\"", action, username)
+			log.Printf("[RCON] Sending command: %s", mcCommand)
 			log.Printf("[RCON] Sending command: %s", mcCommand)
 		} else {
 			return "Error: Username required for add/remove", nil
