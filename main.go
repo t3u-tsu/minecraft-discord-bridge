@@ -38,34 +38,33 @@ func main() {
 
 	// Discord セッションの作成
 	dg, err := discordgo.New("Bot " + cfg.Discord.Token)
-	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
 	if err != nil {
 		log.Fatalf("Failed to create Discord session: %v", err)
 	}
+	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
 
-	// コマンドハンドラの追加
-	
+	// 接続情報の表示用ハンドラ
 	dg.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		log.Printf("Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
-		log.Printf("Bot is joined to %d guilds", len(s.State.Guilds))
-		for _, g := range s.State.Guilds {
-			log.Printf("- Guild: %s (ID: %s)", g.Name, g.ID)
-		}
-		log.Printf("Registering commands for Admin Guild: %s", cfg.Discord.AdminGuildID)
-		RegisterCommands(s, cfg.Discord.AdminGuildID)
+		log.Printf("[DISCORD] Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
+		log.Printf("[DISCORD] Bot is joined to %d guilds", len(s.State.Guilds))
 	})
 
-
+	// インタラクションハンドラの追加
 	AddHandlers(dg, db, cfg)
 
 	// 接続開始
 	err = dg.Open()
 	if err != nil {
-		log.Printf("Failed to open Discord connection: %v", err)
+		log.Printf("[DISCORD] Failed to open connection: %v", err)
 		log.Println("Continuing in local management mode...")
 	} else {
 		defer dg.Close()
-		log.Println("Discord bot is now running.")
+		log.Println("[DISCORD] Bot connected. Registering commands...")
+		
+		// コマンドの登録を Open の直後に行う (Ready を待たずに開始)
+		RegisterCommands(dg, cfg.Discord.AdminGuildID)
+		
+		log.Println("[DISCORD] Command registration process initiated.")
 	}
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")
