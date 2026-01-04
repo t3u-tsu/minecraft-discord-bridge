@@ -26,6 +26,7 @@ type Config struct {
 type MCServerConfig struct {
 	Network  string `toml:"network"`  // "tcp" or "unix"
 	Address  string `toml:"address"`  // "127.0.0.1:25575" or "/run/minecraft/nitac23s.rcon"
+	WhitelistPath string `toml:"whitelist_path"`
 	Password string `toml:"password"`
 }
 
