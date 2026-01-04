@@ -63,6 +63,21 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 		}
 		return "Token revoked.", nil
 
+	case "links":
+		list, err := db.ListLinks()
+		if err != nil {
+			return "", err
+		}
+		if len(list) == 0 {
+			return "No guilds linked.", nil
+		}
+		var sb strings.Builder
+		sb.WriteString("Active Links:\n")
+		for _, l := range list {
+			sb.WriteString(fmt.Sprintf("- Guild: %s | Server: %s | Role: %s | Channel: %s\n", l.GuildID, l.TargetServer, l.RoleID, l.ChannelID))
+		}
+		return sb.String(), nil
+
 	case "whitelist":
 		// whitelist <server_name> <add|remove|list> [username]
 		if len(args) < 3 {

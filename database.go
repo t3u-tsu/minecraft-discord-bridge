@@ -150,6 +150,31 @@ func (d *Database) GetLinkInfo(guildID string) (string, string, string, error) {
 	return targetServer, roleID, channelID, nil
 }
 
+type LinkInfo struct {
+	GuildID      string
+	TargetServer string
+	RoleID       string
+	ChannelID    string
+}
+
+func (d *Database) ListLinks() ([]LinkInfo, error) {
+	rows, err := d.db.Query("SELECT guild_id, target_mc_server, management_role_id, allowed_channel_id FROM links")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []LinkInfo
+	for rows.Next() {
+		var l LinkInfo
+		if err := rows.Scan(&l.GuildID, &l.TargetServer, &l.RoleID, &l.ChannelID); err != nil {
+			continue
+		}
+		list = append(list, l)
+	}
+	return list, nil
+}
+
 func (d *Database) Close() {
 	d.db.Close()
 }
