@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -10,9 +10,12 @@ import (
 	"strings"
 )
 
+type WhitelistEntry struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
 // コマンド実行の核となる関数
-// 引数: コマンド文字列
-// 戻り値: レスポンス文字列, エラー
 func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 	args := strings.Fields(input)
 	if len(args) == 0 {
@@ -21,7 +24,6 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 
 	command := args[0]
 	log.Printf("[CORE] Processing command: %s", input)
-	log.Printf("[CORE] Full command string to send: %q", input)
 
 	switch command {
 	case "invite-create":
@@ -29,29 +31,24 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			return "Usage: invite-create <server_name> <invitation_name>", nil
 		}
 		srvName := args[1]
-		// Check if server exists in config
 		if _, ok := cfg.Servers[srvName]; !ok {
-			return fmt.Sprintf("Error: Server '%s' not found in configuration", srvName), nil
+			return fmt.Sprintf("Error: Server '%s' not found", srvName), nil
 		}
 		inviteName := strings.Join(args[2:], " ")
 		token := GenerateToken(srvName)
 		if err := db.CreateInvitation(token, srvName, inviteName); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Token Created: %s (Target: %s, Name: %s)", token, srvName, inviteName), nil
+		return fmt.Sprintf("Token Created: %s", token), nil
 
 	case "invite-list":
 		list, err := db.ListInvitations()
 		if err != nil {
 			return "", err
 		}
-		if len(list) == 0 {
-			return "No active invitations.", nil
-		}
 		var sb strings.Builder
-		sb.WriteString("Active Invitations:\n")
 		for _, i := range list {
-			sb.WriteString(fmt.Sprintf("- %s | Server: %s | Name: %s | Created: %s\n", i.Token, i.TargetServer, i.Name, i.CreatedAt))
+			sb.WriteString(fmt.Sprintf("- %s | %s | %s\n", i.Token, i.TargetServer, i.Name))
 		}
 		return sb.String(), nil
 
@@ -60,7 +57,6 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			return "Usage: invite-revoke <token>", nil
 		}
 		if err := db.RevokeInvitation(args[1]); err != nil {
-			// Ensure error string is returned
 			return fmt.Sprintf("Error: %v", err), nil
 		}
 		return "Token revoked.", nil
@@ -79,132 +75,107 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if len(list) == 0 {
-			return "No guilds linked.", nil
-		}
 		var sb strings.Builder
-		sb.WriteString("Active Links:\n")
 		for _, l := range list {
 			sb.WriteString(fmt.Sprintf("- Guild: %s | Server: %s | Role: %s | Channel: %s\n", l.GuildID, l.TargetServer, l.RoleID, l.ChannelID))
 		}
 		return sb.String(), nil
 
 	case "whitelist":
-		// whitelist <server_name> <add|remove|list> [username]
 		if len(args) < 3 {
 			return "Usage: whitelist <server> <add|remove|list> [user]", nil
 		}
 		srvName, action := args[1], args[2]
 		srvCfg, ok := cfg.Servers[srvName]
 		if !ok {
-			return fmt.Sprintf("Error: Server '%s' not found in configuration", srvName), nil
+			return fmt.Sprintf("Error: Server '%s' not found", srvName), nil
 		}
 
-		mcCommand := ""
 		if action == "list" {
-			mcCommand = "whitelist list"
-		} else if len(args) >= 4 {
-			username := args[3]
-			if !ValidateMinecraftUsername(username) {
-				return fmt.Sprintf("Error: Invalid Minecraft username: %s", username), nil
+			client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
+			if err != nil {
+				return "", err
 			}
-			if action == "list" {
-			mcCommand = "whitelist list"
-		} else if len(args) >= 4 {
-			username := args[3]
-			if !ValidateMinecraftUsername(username) {
-				return fmt.Sprintf("Error: Invalid Minecraft username: %s", username), nil
-			}
-
-			if action == "add" {
-				// Java版ユーザーの場合のみ UUID 解決を試みる
-				if !strings.HasPrefix(username, ".") {
-					if _, err := ResolveUUID(username); err != nil {
-						return fmt.Sprintf("Error: Failed to resolve UUID for %s: %v", username, err), nil
-					}
-				}
-				mcCommand = fmt.Sprintf("whitelist add %s", username)
-			} else if action == "remove" {
-				// --- JSON 直接編集ロジック ---
-				if srvCfg.WhitelistPath == "" {
-					return "Error: whitelist_path is not configured for this server", nil
-				}
-
-				// 1. 読み込み
-				data, err := os.ReadFile(srvCfg.WhitelistPath)
-				if err != nil {
-					return fmt.Sprintf("Error reading whitelist: %v", err), nil
-				}
-
-				var list []WhitelistEntry
-				if err := json.Unmarshal(data, &list); err != nil {
-					return fmt.Sprintf("Error parsing whitelist: %v", err), nil
-				}
-
-				// 2. 削除
-				newList := make([]WhitelistEntry, 0)
-				found := false
-				for _, entry := range list {
-					if strings.EqualFold(entry.Name, username) {
-						found = true
-						continue
-					}
-					newList = append(newList, entry)
-				}
-
-				if !found {
-					return "Error: That player does not exist in the whitelist file", nil
-				}
-
-				// 3. 保存
-				newData, err := json.MarshalIndent(newList, "", "  ")
-				if err != nil {
-					return fmt.Sprintf("Error encoding whitelist: %v", err), nil
-				}
-
-				if err := os.WriteFile(srvCfg.WhitelistPath, newData, 0644); err != nil {
-					return fmt.Sprintf("Error writing whitelist: %v", err), nil
-				}
-
-				// 4. リロードコマンドをセット
-				mcCommand = "whitelist reload"
-			}
-		} else {
-			return "Error: Username required for add/remove", nil
+			defer client.Close()
+			return client.Execute("whitelist list")
 		}
 
-		client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
-		if err != nil {
-			return "", err
+		if len(args) < 4 {
+			return "Error: Username required", nil
 		}
-		defer client.Close()
-		return client.Execute(mcCommand)
+		username := args[3]
+
+		if action == "add" {
+			if !ValidateMinecraftUsername(username) {
+				return "Error: Invalid username", nil
+			}
+			if !strings.HasPrefix(username, ".") {
+				if _, err := ResolveUUID(username); err != nil {
+					return fmt.Sprintf("Error: UUID resolution failed: %v", err), nil
+				}
+			}
+			client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
+			if err != nil {
+				return "", err
+			}
+			defer client.Close()
+			return client.Execute(fmt.Sprintf("whitelist add %s", username))
+		}
+
+		if action == "remove" {
+			if srvCfg.WhitelistPath == "" {
+				return "Error: whitelist_path not configured", nil
+			}
+			data, err := os.ReadFile(srvCfg.WhitelistPath)
+			if err != nil {
+				return fmt.Sprintf("Error reading whitelist: %v", err), nil
+			}
+			var list []WhitelistEntry
+			if err := json.Unmarshal(data, &list); err != nil {
+				return fmt.Sprintf("Error parsing whitelist: %v", err), nil
+			}
+
+			newList := []WhitelistEntry{}
+			found := false
+			for _, e := range list {
+				if strings.EqualFold(e.Name, username) {
+					found = true
+					continue
+				}
+				newList = append(newList, e)
+			}
+			if !found {
+				return "Error: Player not in whitelist file", nil
+			}
+
+			newData, _ := json.MarshalIndent(newList, "", "  ")
+			if err := os.WriteFile(srvCfg.WhitelistPath, newData, 0644); err != nil {
+				return fmt.Sprintf("Error writing whitelist: %v", err), nil
+			}
+
+			client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
+			if err != nil {
+				return "", err
+			}
+			defer client.Close()
+			return client.Execute("whitelist reload")
+		}
 
 	case "status":
 		return fmt.Sprintf("Bridge is running. Registered Servers: %s", strings.Join(getServerNames(cfg), ", ")), nil
-
-	default:
-		return fmt.Sprintf("Unknown command: %s", command), nil
 	}
+	return "Unknown command", nil
 }
 
 func StartSocketServer(path string, db *Database, cfg *Config) {
-	if err := os.RemoveAll(path); err != nil {
-		log.Fatal(err)
-	}
-
+	os.RemoveAll(path)
 	l, err := net.Listen("unix", path)
 	if err != nil {
-		log.Fatal("Socket listen error:", err)
+		log.Fatal(err)
 	}
 	defer l.Close()
-
-	if err := os.Chmod(path, 0660); err != nil {
-		log.Printf("Warning: Failed to chmod socket: %v", err)
-	}
-
-	log.Printf("[SOCKET] Management socket listening on %s", path)
-
+	os.Chmod(path, 0660)
+	log.Printf("[SOCKET] Listening on %s", path)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -218,12 +189,11 @@ func handleSocketConnection(c net.Conn, db *Database, cfg *Config) {
 	defer c.Close()
 	scanner := bufio.NewScanner(c)
 	for scanner.Scan() {
-		input := scanner.Text()
-		response, err := ProcessCommand(input, db, cfg)
+		res, err := ProcessCommand(scanner.Text(), db, cfg)
 		if err != nil {
-			c.Write([]byte(fmt.Sprintf("ERROR: %v\n", err)))
+			c.Write([]byte("Error: " + err.Error() + "\n"))
 		} else {
-			c.Write([]byte(response + "\n"))
+			c.Write([]byte(res + "\n"))
 		}
 	}
 }
@@ -234,8 +204,4 @@ func getServerNames(cfg *Config) []string {
 		names = append(names, k)
 	}
 	return names
-}
-type WhitelistEntry struct {
-	UUID string `json:"uuid"`
-	Name string `json:"name"`
 }
