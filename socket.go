@@ -57,7 +57,7 @@ func handleSocketConnection(c net.Conn, db *Database, cfg *Config) {
 			if len(args) < 2 {
 				response = "Usage: invite-create <server_name>\n"
 			} else {
-				token := "MC-" + args[1] + "-LOCAL"
+				token := GenerateToken(args[1])
 				err := db.CreateInvitation(token, args[1])
 				if err != nil {
 					response = "Error: " + err.Error() + "\n"

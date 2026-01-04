@@ -1,0 +1,14 @@
+[discord]
+token = "dummy"
+admin_guild_id = "dummy"
+
+[database]
+path = "./test_bridge.db"
+
+[bridge]
+socket_path = "./test_bridge.sock"
+
+[servers.mc-test]
+network = "tcp"
+address = "127.0.0.1:25575"
+password = "testpassword"

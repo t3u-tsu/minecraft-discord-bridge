@@ -203,7 +203,7 @@ func handleInviteCreate(s *discordgo.Session, i *discordgo.InteractionCreate, db
 	// 権限チェックは RegisterCommands 側の Guild 制限で行っているが
 	// 追加でユーザーIDチェックなども入れるとより安全
 	serverName := i.ApplicationCommandData().Options[0].StringValue()
-	token := "MC-" + serverName + "-" + fmt.Sprintf("%d", i.ID)[:6] // 簡易的なトークン生成
+	token := GenerateToken(serverName) // 簡易的なトークン生成
 
 	err := db.CreateInvitation(token, serverName)
 	msg := ""

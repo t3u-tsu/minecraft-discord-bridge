@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -127,4 +129,12 @@ func (c *RCONClient) send(packetType int32, payload string) (int32, string, erro
 
 func (c *RCONClient) Close() {
 	c.conn.Close()
+}
+
+func GenerateToken(serverName string) string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "MC-" + serverName + "-fallback"
+	}
+	return "MC-" + serverName + "-" + hex.EncodeToString(b)
 }
