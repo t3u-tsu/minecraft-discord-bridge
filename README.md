@@ -49,6 +49,7 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 
 ### Unix Socket Commands
 - `invite-create <srv> <name>`, `invite-list`, `invite-revoke <token>`
+- `links`: Show current Discord guild links.
 - `status`, `whitelist <srv> <add|remove|list> [user]`
 
 ## License

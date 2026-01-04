@@ -23,7 +23,7 @@ NixOS 運用に最適化された、Go 製の汎用 Minecraft Discord 連携ツ�
 1. [Discord Developer Portal](https://discord.com/developers/applications) にアクセス。
 2. **New Application** を作成し、左メニューの **Bot** を選択。
 3. **Reset Token** を押してトークンを取得。
-4. **Privileged Gateway Intents** で `Server Members Intent` を **必ず ON** にします。
+4. **Privileged Gateway Intents** で `Server Members Intent` を **必ず ON** にします（ロール付与に必要）。
 
 ### 2. Bot の招待
 1. **OAuth2 -> URL Generator** を開きます。
@@ -58,6 +58,7 @@ NixOS 運用に最適化された、Go 製の汎用 Minecraft Discord 連携ツ�
 - `invite-create <srv> <name>`: トークン発行。
 - `invite-list`: トークン一覧。
 - `invite-revoke <token>`: トークン失効。
+- `links`: 現在の Discord サーバーとの接続状況を表示。
 - `status`: 稼働状況確認。
 - `whitelist <srv> <add|remove|list> [user]`: 直接 RCON 操作。
 
