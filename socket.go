@@ -103,11 +103,16 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			mcCommand = "whitelist list"
 		} else if len(args) >= 4 {
 			username := args[3]
-			// add/remove の場合は UUID 解決を試みる (バリデーション目的)
-			_, err := ResolveUUID(username)
-			if err != nil {
-				return fmt.Sprintf("Error: Failed to resolve UUID for %s: %v", username, err), nil
+			if !ValidateMinecraftUsername(username) {
+				return fmt.Sprintf("Error: Invalid Minecraft username: %s", username), nil
 			}
+			if action == "add" {
+				// add の場合はバリデーションとして UUID 解決を試みる
+				if _, err := ResolveUUID(username); err != nil {
+					return fmt.Sprintf("Error: Failed to resolve UUID for %s: %v", username, err), nil
+				}
+			}
+			// remove の場合は名前変更等に対応するため UUID 解決をスキップして直接命令を送る
 			mcCommand = fmt.Sprintf("whitelist %s %s", action, username)
 		} else {
 			return "Error: Username required for add/remove", nil

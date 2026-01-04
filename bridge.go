@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -137,4 +138,9 @@ func GenerateToken(serverName string) string {
 		return "MC-" + serverName + "-fallback"
 	}
 	return "MC-" + serverName + "-" + hex.EncodeToString(b)
+}
+var usernameRegex = regexp.MustCompile("^[a-zA-Z0-9_]{2,16}$")
+
+func ValidateMinecraftUsername(username string) bool {
+	return usernameRegex.MatchString(username)
 }
