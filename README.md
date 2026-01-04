@@ -5,10 +5,11 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 ## Key Features
 
 - **Multi-tenant Management**: Securely link Discord guilds to specific Minecraft servers using invitation tokens.
-- **Named Invitations**: Track tokens by name to know who you invited.
+- **Persistent Named Invitations**: Track and reuse tokens by name. Tokens remain valid until manually revoked.
 - **Role-based Access Control**: Require specific Discord roles for administration commands.
 - **Channel Restriction**: Limit bot commands to a specific Discord channel for each linked server.
 - **Onboarding System**: Simple `/join` command to grant the required administration role to users.
+- **Link Management**: List all connected Discord guilds and unlink them remotely if necessary.
 - **Whitelist Operations**: Manage Minecraft whitelists via Discord slash commands.
 - **UUID Resolution**: Automatic validation of player names via Mojang API.
 - **Local Management Socket**: Control everything from the server's command line.
@@ -43,14 +44,16 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 - `/token create <srv> <name>`: [Admin Only] Issue a named token.
 - `/token list`: [Admin Only] List active tokens.
 - `/token revoke <token>`: [Admin Only] Revoke a token.
+- `/links list`: [Admin Only] List all linked Discord guilds.
+- `/links unlink <guild_id>`: [Admin Only] Terminate a link with a guild.
 - `/bridge-link <token> <role> [channel]`: Link a guild and set its management role/channel.
 - `/join`: Request the management role.
 - `/whitelist <add|remove|list>`: Manage server whitelist.
 
 ### Unix Socket Commands
-- `invite-create <srv> <name>`, `invite-list`, `invite-revoke <token>`
-- `links`: Show current Discord guild links.
-- `status`, `whitelist <srv> <add|remove|list> [user]`
+- `token create`, `token list`, `token revoke`
+- `links`, `unlink`
+- `status`, `whitelist`
 
 ## License
 
