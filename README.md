@@ -13,6 +13,7 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 - **Whitelist Operations**: Manage whitelists via Discord slash commands.
 - **Reliable Removal**: Direct `whitelist.json` editing ensures that name-changed or Bedrock players can be removed without issues.
 - **UUID Resolution**: Automatic validation of player names via Mojang API.
+- **Native RCON**: Support for RCON over both TCP and Unix Domain Sockets.
 - **Local Management Socket**: Control everything from the server's command line.
 - **Auto-Migration**: Database schema updates are automatically applied on startup.
 
