@@ -107,9 +107,11 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 				return fmt.Sprintf("Error: Invalid Minecraft username: %s", username), nil
 			}
 			if action == "add" {
-				// add の場合はバリデーションとして UUID 解決を試みる
-				if _, err := ResolveUUID(username); err != nil {
-					return fmt.Sprintf("Error: Failed to resolve UUID for %s: %v", username, err), nil
+				// Java版ユーザー（ドットで始まらない）の場合のみバリデーションとして UUID 解決を試みる
+				if !strings.HasPrefix(username, ".") {
+					if _, err := ResolveUUID(username); err != nil {
+						return fmt.Sprintf("Error: Failed to resolve UUID for %s: %v", username, err), nil
+					}
 				}
 			}
 			// remove の場合は名前変更等に対応するため UUID 解決をスキップして直接命令を送る
