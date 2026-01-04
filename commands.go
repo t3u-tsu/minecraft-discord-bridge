@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -10,6 +11,7 @@ var AdminGuildID string
 
 func RegisterCommands(s *discordgo.Session, guildID string) {
 	AdminGuildID = guildID
+	log.Printf("[DISCORD] RegisterCommands called with AdminGuildID: '%s'", guildID)
 
 	// グローバルコマンド
 	globalCommands := []*discordgo.ApplicationCommand{
@@ -131,9 +133,24 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 		},
 	}
 
-	s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", globalCommands)
+	log.Printf("[DISCORD] Overwriting global commands...")
+	registeredGlobals, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", globalCommands)
+	if err != nil {
+		log.Printf("[DISCORD] Error overwriting global commands: %v", err)
+	} else {
+		log.Printf("[DISCORD] Successfully registered %d global commands", len(registeredGlobals))
+	}
+
 	if guildID != "" {
-		s.ApplicationCommandBulkOverwrite(s.State.User.ID, guildID, adminCommands)
+		log.Printf("[DISCORD] Overwriting admin commands for guild %s...", guildID)
+		registeredAdmins, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, guildID, adminCommands)
+		if err != nil {
+			log.Printf("[DISCORD] Error overwriting admin commands: %v", err)
+		} else {
+			log.Printf("[DISCORD] Successfully registered %d admin commands for guild %s", len(registeredAdmins), guildID)
+		}
+	} else {
+		log.Printf("[DISCORD] No AdminGuildID provided, skipping admin command registration")
 	}
 }
 
@@ -144,6 +161,8 @@ func AddHandlers(s *discordgo.Session, db *Database, cfg *Config) {
 		}
 
 		data := i.ApplicationCommandData()
+		log.Printf("[DISCORD] Received command '%s' from guild '%s'", data.Name, i.GuildID)
+
 		switch data.Name {
 		case "help":
 			handleHelp(s, i)
@@ -276,27 +295,8 @@ func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *D
 	}
 }
 
-func handleAdminCommands(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
-	if i.GuildID != AdminGuildID {
-		respondWithError(s, i, "This command can only be used in the admin server.")
-		return
-	}
-
-	data := i.ApplicationCommandData()
-	cmdText := data.Name
-	for _, opt := range data.Options {
-		cmdText += " " + opt.StringValue()
-	}
-
-	resp, err := ProcessCommand(cmdText, db, cfg)
-	if err != nil {
-		respondWithError(s, i, err.Error())
-	} else {
-		respondWithSuccess(s, i, resp)
-	}
-}
-
 func handleTokenCommands(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
+	log.Printf("[DISCORD] Checking AdminGuildID for '/token' command. Got: '%s', Expected: '%s'", i.GuildID, AdminGuildID)
 	if i.GuildID != AdminGuildID {
 		respondWithError(s, i, "This command can only be used in the admin server.")
 		return
