@@ -38,7 +38,7 @@ func main() {
 
 	// Discord セッションの作成
 	dg, err := discordgo.New("Bot " + cfg.Discord.Token)
-	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
+	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildPresences
 	if err != nil {
 		log.Fatalf("Failed to create Discord session: %v", err)
 	}
