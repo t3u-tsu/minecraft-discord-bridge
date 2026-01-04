@@ -9,32 +9,118 @@ import (
 	"strings"
 )
 
+// コマンド実行の核となる関数
+// 引数: コマンド文字列
+// 戻り値: レスポンス文字列, エラー
+func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
+	args := strings.Fields(input)
+	if len(args) == 0 {
+		return "", nil
+	}
+
+	command := args[0]
+	log.Printf("[CORE] Processing command: %s", input)
+
+	switch command {
+	case "invite-create":
+		if len(args) < 3 {
+			return "Usage: invite-create <server_name> <invitation_name>", nil
+		}
+		srvName := args[1]
+		inviteName := strings.Join(args[2:], " ")
+		token := GenerateToken(srvName)
+		if err := db.CreateInvitation(token, srvName, inviteName); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Token Created: %s (Target: %s, Name: %s)", token, srvName, inviteName), nil
+
+	case "invite-list":
+		list, err := db.ListInvitations()
+		if err != nil {
+			return "", err
+		}
+		if len(list) == 0 {
+			return "No active invitations.", nil
+		}
+		var sb strings.Builder
+		sb.WriteString("Active Invitations:\n")
+		for _, i := range list {
+			sb.WriteString(fmt.Sprintf("- %s | Server: %s | Name: %s | Created: %s\n", i.Token, i.TargetServer, i.Name, i.CreatedAt))
+		}
+		return sb.String(), nil
+
+	case "invite-revoke":
+		if len(args) < 2 {
+			return "Usage: invite-revoke <token>", nil
+		}
+		if err := db.RevokeInvitation(args[1]); err != nil {
+			return "", err
+		}
+		return "Token revoked.", nil
+
+	case "whitelist":
+		// whitelist <server_name> <add|remove|list> [username]
+		if len(args) < 3 {
+			return "Usage: whitelist <server> <add|remove|list> [user]", nil
+		}
+		srvName, action := args[1], args[2]
+		srvCfg, ok := cfg.Servers[srvName]
+		if !ok {
+			return fmt.Sprintf("Error: Server '%s' not found in config", srvName), nil
+		}
+
+		mcCommand := ""
+		if action == "list" {
+			mcCommand = "whitelist list"
+		} else if len(args) >= 4 {
+			username := args[3]
+			// add/remove の場合は UUID 解決を試みる (バリデーション目的)
+			_, err := ResolveUUID(username)
+			if err != nil {
+				return fmt.Sprintf("Error resolving UUID for %s: %v", username, err), nil
+			}
+			mcCommand = fmt.Sprintf("whitelist %s %s", action, username)
+		} else {
+			return "Error: Username required for add/remove", nil
+		}
+
+		client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
+		if err != nil {
+			return "", err
+		}
+		defer client.Close()
+		return client.Execute(mcCommand)
+
+	case "status":
+		return fmt.Sprintf("Bridge is running. Registered Servers: %s", strings.Join(getServerNames(cfg), ", ")), nil
+
+	default:
+		return fmt.Sprintf("Unknown command: %s", command), nil
+	}
+}
+
 func StartSocketServer(path string, db *Database, cfg *Config) {
-	// 既存のソケットファイルがあれば削除
 	if err := os.RemoveAll(path); err != nil {
 		log.Fatal(err)
 	}
 
 	l, err := net.Listen("unix", path)
 	if err != nil {
-		log.Fatal("listen error:", err)
+		log.Fatal("Socket listen error:", err)
 	}
 	defer l.Close()
 
-	// パーミッションを適切に設定（t3uユーザーや特定のグループが叩けるように）
 	if err := os.Chmod(path, 0660); err != nil {
 		log.Printf("Warning: Failed to chmod socket: %v", err)
 	}
 
-	log.Printf("Management socket listening on %s", path)
+	log.Printf("[SOCKET] Management socket listening on %s", path)
 
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			log.Print("accept error:", err)
 			continue
 		}
-
 		go handleSocketConnection(conn, db, cfg)
 	}
 }
@@ -44,70 +130,12 @@ func handleSocketConnection(c net.Conn, db *Database, cfg *Config) {
 	scanner := bufio.NewScanner(c)
 	for scanner.Scan() {
 		input := scanner.Text()
-		log.Printf("Received from socket: %s", input)
-
-		args := strings.Fields(input)
-		if len(args) == 0 {
-			continue
+		response, err := ProcessCommand(input, db, cfg)
+		if err != nil {
+			c.Write([]byte(fmt.Sprintf("ERROR: %v\n", err)))
+		} else {
+			c.Write([]byte(response + "\n"))
 		}
-
-		response := ""
-		switch args[0] {
-		case "invite-create":
-			if len(args) < 2 {
-				response = "Usage: invite-create <server_name>\n"
-			} else {
-				token := GenerateToken(args[1])
-				err := db.CreateInvitation(token, args[1])
-				if err != nil {
-					response = "Error: " + err.Error() + "\n"
-				} else {
-					response = "Token created: " + token + "\n"
-				}
-			}
-		case "whitelist":
-			// whitelist <server_name> <add|remove|list> [username]
-			if len(args) < 3 {
-				response = "Usage: whitelist <server_name> <add|remove|list> [username]\n"
-			} else {
-				srvName := args[1]
-				action := args[2]
-				srvCfg, ok := cfg.Servers[srvName]
-				if !ok {
-					response = "Error: Server configuration not found\n"
-				} else {
-					mcCommand := ""
-					if action == "list" {
-						mcCommand = "whitelist list"
-					} else if len(args) >= 4 {
-						mcCommand = fmt.Sprintf("whitelist %s %s", action, args[3])
-					} else {
-						response = "Error: Username required for add/remove\n"
-					}
-
-					if mcCommand != "" {
-						client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
-						if err != nil {
-							response = "Error: " + err.Error() + "\n"
-						} else {
-							res, err := client.Execute(mcCommand)
-							client.Close()
-							if err != nil {
-								response = "Error: " + err.Error() + "\n"
-							} else {
-								response = res + "\n"
-							}
-						}
-					}
-				}
-			}
-		case "status":
-			response = "Bridge is running. Registered servers: " + strings.Join(getServerNames(cfg), ", ") + "\n"
-		default:
-			response = "Unknown command via socket\n"
-		}
-
-		c.Write([]byte(response))
 	}
 }
 

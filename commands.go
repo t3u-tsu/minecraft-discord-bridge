@@ -2,28 +2,35 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-var (
-	AdminGuildID string // 管理用コマンドを許可する Discord サーバー ID
-)
+var AdminGuildID string
 
 func RegisterCommands(s *discordgo.Session, guildID string) {
 	AdminGuildID = guildID
 
-	// グローバルコマンド (全てのサーバーで表示)
+	// グローバルコマンド
 	globalCommands := []*discordgo.ApplicationCommand{
 		{
+			Name:        "join",
+			Description: "Join the Minecraft server and get the member role",
+		},
+		{
 			Name:        "bridge-link",
-			Description: "Link this Discord server to a Minecraft server using an invitation token",
+			Description: "Link this Discord server to a Minecraft server",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "token",
 					Description: "Invitation token",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionRole,
+					Name:        "role",
+					Description: "The role required to manage the Minecraft server via this bot",
 					Required:    true,
 				},
 			},
@@ -67,158 +74,168 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 		},
 	}
 
-	// 管理者専用コマンド (指定ギルドのみ)
+	// 管理者用コマンド
 	adminCommands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "invite-create",
-			Description: "Generate a new invitation token for a Minecraft server",
+			Description: "Generate a new invitation token",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "server",
-					Description: "Minecraft server name (e.g., nitac23s, lobby)",
+					Description: "Minecraft server name",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "name",
+					Description: "Name for this invitation",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "invite-list",
+			Description: "List all active invitation tokens",
+		},
+		{
+			Name:        "invite-revoke",
+			Description: "Revoke an invitation token",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "token",
+					Description: "Token to revoke",
 					Required:    true,
 				},
 			},
 		},
 	}
 
-	// グローバルコマンドを一括登録 (これに含まれない既存のグローバルコマンドは削除される)
-	_, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", globalCommands)
-	if err != nil {
-		log.Printf("Error overwriting global commands: %v", err)
-	}
-
-	// 管理者コマンドをギルドに登録
+	s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", globalCommands)
 	if guildID != "" {
-		_, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, guildID, adminCommands)
-		if err != nil {
-			log.Printf("Error overwriting admin commands: %v", err)
-		}
+		s.ApplicationCommandBulkOverwrite(s.State.User.ID, guildID, adminCommands)
 	}
 }
 
 func AddHandlers(s *discordgo.Session, db *Database, cfg *Config) {
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		switch i.Type {
-		case discordgo.InteractionApplicationCommand:
-			data := i.ApplicationCommandData()
-			switch data.Name {
-			case "bridge-link":
-				handleLink(s, i, db)
-			case "whitelist":
-				handleWhitelist(s, i, db, cfg)
-			case "invite-create":
-				handleInviteCreate(s, i, db)
-			}
+		if i.Type != discordgo.InteractionApplicationCommand {
+			return
+		}
+
+		data := i.ApplicationCommandData()
+		switch data.Name {
+		case "join":
+			handleJoin(s, i, db)
+		case "bridge-link":
+			handleLink(s, i, db)
+		case "whitelist":
+			handleWhitelist(s, i, db, cfg)
+		case "invite-create", "invite-list", "invite-revoke":
+			handleAdminCommands(s, i, db, cfg)
 		}
 	})
 }
 
-func handleLink(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
-	token := i.ApplicationCommandData().Options[0].StringValue()
-	targetServer, err := db.LinkGuild(i.GuildID, token)
-
-	msg := ""
-	if err != nil {
-		msg = fmt.Sprintf("❌ Error: %v", err)
-	} else {
-		msg = fmt.Sprintf("✅ Success! This Discord server is now linked to Minecraft server: **%s**", targetServer)
+// 参加表明コマンド: 管理ロールを付与する
+func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
+	_, roleID, err := db.GetLinkInfo(i.GuildID)
+	if err != nil || roleID == "" {
+		respondWithError(s, i, "This server is not properly linked or no management role is configured.")
+		return
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: msg,
-			Flags:   discordgo.MessageFlagsEphemeral, // 本人のみに表示
-		},
-	})
+	err = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, roleID)
+	if err != nil {
+		respondWithError(s, i, fmt.Sprintf("Failed to assign role: %v", err))
+		return
+	}
+
+	respondWithSuccess(s, i, fmt.Sprintf("✅ Welcome! You have been granted the <@&%s> role.", roleID))
 }
 
-func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
-	// 1. サーバーがリンクされているか確認
-	targetServer, err := db.GetTargetServer(i.GuildID)
+func handleLink(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
+	options := i.ApplicationCommandData().Options
+	token := options[0].StringValue()
+	role := options[1].RoleValue(s, i.GuildID)
+
+	targetServer, err := db.LinkGuild(i.GuildID, token, role.ID)
 	if err != nil {
 		respondWithError(s, i, err.Error())
 		return
 	}
 
-	// 2. サーバーの RCON 設定を取得
-	srvCfg, ok := cfg.Servers[targetServer]
-	if !ok {
-		respondWithError(s, i, fmt.Sprintf("Configuration for server '%s' not found", targetServer))
-		return
-	}
+	respondWithSuccess(s, i, fmt.Sprintf("✅ Linked to **%s**. Management role set to <@&%s>.", targetServer, role.ID))
+}
 
-	// 3. コマンドの解析
-	subCommand := i.ApplicationCommandData().Options[0]
-	action := subCommand.Name // "add", "remove", or "list"
-
-	mcCommand := ""
-	if action == "list" {
-		mcCommand = "whitelist list"
-	} else {
-		username := subCommand.Options[0].StringValue()
-		// UUID の解決 (add/remove のみ)
-		uuid, err := ResolveUUID(username)
-		if err != nil {
-			respondWithError(s, i, fmt.Sprintf("Failed to resolve UUID for %s: %v", username, err))
+func handleWhitelist(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
+	// 管理ロールを持っているかチェック
+	_, roleID, err := db.GetLinkInfo(i.GuildID)
+	if err == nil && roleID != "" {
+		hasRole := false
+		for _, r := range i.Member.Roles {
+			if r == roleID {
+				hasRole = true
+				break
+			}
+		}
+		if !hasRole {
+			respondWithError(s, i, fmt.Sprintf("You need the <@&%s> role to use this command. Use `/join` to get it.", roleID))
 			return
 		}
-		log.Printf("Resolved UUID for %s: %s", username, uuid)
-		mcCommand = fmt.Sprintf("whitelist %s %s", action, username)
 	}
 
-	// 4. RCON 実行
-	client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
+	// 共通ロジック (socketと同一) を呼び出すための文字列を生成
+	sub := i.ApplicationCommandData().Options[0]
+	targetServer, _, _ := db.GetLinkInfo(i.GuildID)
+	
+	cmdText := ""
+	if sub.Name == "list" {
+		cmdText = fmt.Sprintf("whitelist %s list", targetServer)
+	} else {
+		cmdText = fmt.Sprintf("whitelist %s %s %s", targetServer, sub.Name, sub.Options[0].StringValue())
+	}
+
+	resp, err := ProcessCommand(cmdText, db, cfg)
 	if err != nil {
-		respondWithError(s, i, fmt.Sprintf("Failed to connect to Minecraft server: %v", err))
+		respondWithError(s, i, err.Error())
+	} else {
+		respondWithSuccess(s, i, fmt.Sprintf("🎮 **Minecraft Response:**\n```\n%s\n```", resp))
+	}
+}
+
+func handleAdminCommands(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database, cfg *Config) {
+	if i.GuildID != AdminGuildID {
+		respondWithError(s, i, "This command can only be used in the admin server.")
 		return
 	}
-	defer client.Close()
 
-	response, err := client.Execute(mcCommand)
-	if err != nil {
-		respondWithError(s, i, fmt.Sprintf("Failed to execute command: %v", err))
-		return
+	data := i.ApplicationCommandData()
+	cmdText := data.Name
+	for _, opt := range data.Options {
+		cmdText += " " + opt.StringValue()
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("🎮 **Minecraft Response:**\n```\n%s\n```", response),
-		},
-	})
+	resp, err := ProcessCommand(cmdText, db, cfg)
+	if err != nil {
+		respondWithError(s, i, err.Error())
+	} else {
+		respondWithSuccess(s, i, resp)
+	}
 }
 
 func respondWithError(s *discordgo.Session, i *discordgo.InteractionCreate, msg string) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("❌ Error: %s", msg),
+			Content: fmt.Sprintf("❌ **Error:** %s", msg),
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
 
-func handleInviteCreate(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
-	if i.GuildID != AdminGuildID {
-		respondWithError(s, i, "This command can only be used in the admin server.")
-		return
-	}
-	// 権限チェックは RegisterCommands 側の Guild 制限で行っているが
-	// 追加でユーザーIDチェックなども入れるとより安全
-	serverName := i.ApplicationCommandData().Options[0].StringValue()
-	token := GenerateToken(serverName) // 簡易的なトークン生成
-
-	err := db.CreateInvitation(token, serverName)
-	msg := ""
-	if err != nil {
-		msg = fmt.Sprintf("❌ Failed to create invitation: %v", err)
-	} else {
-		msg = fmt.Sprintf("🎫 New invitation token for **%s**:\n`%s`", serverName, token)
-	}
-
+func respondWithSuccess(s *discordgo.Session, i *discordgo.InteractionCreate, msg string) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
