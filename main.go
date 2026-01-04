@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -43,10 +44,18 @@ func main() {
 	}
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
 
+	var once sync.Once
+
 	// 接続情報の表示用ハンドラ
 	dg.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		log.Printf("[DISCORD] Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
-		log.Printf("[DISCORD] Bot is joined to %d guilds", len(s.State.Guilds))
+		log.Printf("[DISCORD] Ready! Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
+		
+		// Ready イベントで一度だけ確実にコマンド登録を行う
+		once.Do(func() {
+			log.Println("[DISCORD] Performing initial command registration...")
+			RegisterCommands(s, cfg.Discord.AdminGuildID)
+			log.Println("[DISCORD] Initial command registration complete.")
+		})
 	})
 
 	// インタラクションハンドラの追加
@@ -59,12 +68,7 @@ func main() {
 		log.Println("Continuing in local management mode...")
 	} else {
 		defer dg.Close()
-		log.Println("[DISCORD] Bot connected. Registering commands...")
-		
-		// コマンドの登録を Open の直後に行う (Ready を待たずに開始)
-		RegisterCommands(dg, cfg.Discord.AdminGuildID)
-		
-		log.Println("[DISCORD] Command registration process initiated.")
+		log.Println("[DISCORD] Bot connected to gateway.")
 	}
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")

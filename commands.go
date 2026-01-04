@@ -11,19 +11,23 @@ var AdminGuildID string
 
 func RegisterCommands(s *discordgo.Session, guildID string) {
 	AdminGuildID = guildID
-	if s.State.User == nil || appID == "" {
+	
+	// IDが取得できない場合はAPIから直接取得を試みる
+	appID := ""
+	if s.State.User != nil {
+		appID = s.State.User.ID
+	}
+	if appID == "" {
 		log.Printf("[DISCORD] State.User.ID is empty, fetching from API...")
 		u, err := s.User("@me")
 		if err != nil {
 			log.Printf("[DISCORD] Error fetching self info: %v", err)
 			return
 		}
-		// 簡易的に ID だけセット（State 自体は後で自動更新される）
-		s.State.User = u
+		appID = u.ID
 	}
-	appID := appID
 
-	log.Printf("[DISCORD] RegisterCommands called with AdminGuildID: '%s'", guildID)
+	log.Printf("[DISCORD] Registering commands for AppID: %s", appID)
 
 	// グローバルコマンド
 	globalCommands := []*discordgo.ApplicationCommand{
@@ -169,31 +173,18 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 		},
 	}
 
-	log.Printf("[DISCORD] Refreshing commands (clearing first)...")
-	s.ApplicationCommandBulkOverwrite(appID, "", []*discordgo.ApplicationCommand{})
-	if guildID != "" {
-		s.ApplicationCommandBulkOverwrite(appID, guildID, []*discordgo.ApplicationCommand{})
-	}
-
-	log.Printf("[DISCORD] Overwriting global commands...")
-
-	registeredGlobals, err := s.ApplicationCommandBulkOverwrite(appID, "", globalCommands)
+	// グローバルコマンドを一括登録
+	_, err := s.ApplicationCommandBulkOverwrite(appID, "", globalCommands)
 	if err != nil {
 		log.Printf("[DISCORD] Error overwriting global commands: %v", err)
-	} else {
-		log.Printf("[DISCORD] Successfully registered %d global commands", len(registeredGlobals))
 	}
 
+	// 管理者コマンドをギルドに登録
 	if guildID != "" {
-		log.Printf("[DISCORD] Overwriting admin commands for guild %s...", guildID)
-		registeredAdmins, err := s.ApplicationCommandBulkOverwrite(appID, guildID, adminCommands)
+		_, err := s.ApplicationCommandBulkOverwrite(appID, guildID, adminCommands)
 		if err != nil {
 			log.Printf("[DISCORD] Error overwriting admin commands: %v", err)
-		} else {
-			log.Printf("[DISCORD] Successfully registered %d admin commands for guild %s", len(registeredAdmins), guildID)
 		}
-	} else {
-		log.Printf("[DISCORD] No AdminGuildID provided, skipping admin command registration")
 	}
 }
 
@@ -257,7 +248,6 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Database) {
 	_, roleID, _, err := db.GetLinkInfo(i.GuildID)
-	log.Printf("[DISCORD] handleJoin: GuildID='%s', UserID='%s', RoleID='%s'", i.GuildID, i.Member.User.ID, roleID)
 	if err != nil || roleID == "" {
 		respondWithError(s, i, "This server is not properly linked or no management role is configured.")
 		return
@@ -279,7 +269,6 @@ func handleJoin(s *discordgo.Session, i *discordgo.InteractionCreate, db *Databa
 
 	err = s.GuildMemberRoleAdd(i.GuildID, i.Member.User.ID, roleID)
 	if err != nil {
-		log.Printf("[DISCORD] Error adding role: %v", err)
 		respondWithError(s, i, fmt.Sprintf("Failed to assign role: %v", err))
 		return
 	}
