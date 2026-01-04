@@ -29,7 +29,7 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 
 ### 3. Setup and Pair
 1. Configure `config.toml` and start the binary.
-2. Issue a token on your admin server: `/invite-create server:nitac23s name:AdminTeamA`
+2. Issue a token on your admin server: `/token create server:nitac23s name:AdminTeamA`
 3. Link a target server: `/bridge-link token:<TOKEN> role:@AdminRole`
 4. Users in that server can now use `/join` to start managing the whitelist.
 
@@ -38,9 +38,9 @@ A versatile Minecraft-Discord integration tool written in Go, optimized for NixO
 ## Commands
 
 ### Discord Slash Commands
-- `/invite-create <srv> <name>`: [Admin Only] Issue a named token.
-- `/invite-list`: [Admin Only] List active tokens.
-- `/invite-revoke <token>`: [Admin Only] Revoke a token.
+- `/token create <srv> <name>`: [Admin Only] Issue a named token.
+- `/token list`: [Admin Only] List active tokens.
+- `/token revoke <token>`: [Admin Only] Revoke a token.
 - `/bridge-link <token> <role>`: Link a guild and set its management role.
 - `/join`: Request the management role.
 - `/whitelist <add|remove|list>`: Manage server whitelist.

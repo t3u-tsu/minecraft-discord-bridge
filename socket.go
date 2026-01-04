@@ -27,6 +27,10 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			return "Usage: invite-create <server_name> <invitation_name>", nil
 		}
 		srvName := args[1]
+		// Check if server exists in config
+		if _, ok := cfg.Servers[srvName]; !ok {
+			return fmt.Sprintf("Error: Server '%s' not found in configuration", srvName), nil
+		}
 		inviteName := strings.Join(args[2:], " ")
 		token := GenerateToken(srvName)
 		if err := db.CreateInvitation(token, srvName, inviteName); err != nil {
