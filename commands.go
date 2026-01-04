@@ -133,6 +133,13 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 		},
 	}
 
+	
+	log.Printf("[DISCORD] Refreshing commands (clearing first)...")
+	s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", []*discordgo.ApplicationCommand{})
+	if guildID != "" {
+		s.ApplicationCommandBulkOverwrite(s.State.User.ID, guildID, []*discordgo.ApplicationCommand{})
+	}
+
 	log.Printf("[DISCORD] Overwriting global commands...")
 	registeredGlobals, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", globalCommands)
 	if err != nil {
