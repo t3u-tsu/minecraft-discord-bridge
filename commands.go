@@ -13,7 +13,9 @@ var (
 
 func RegisterCommands(s *discordgo.Session, guildID string) {
 	AdminGuildID = guildID
-	commands := []*discordgo.ApplicationCommand{
+
+	// グローバルコマンド (全てのサーバーで表示)
+	globalCommands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "bridge-link",
 			Description: "Link this Discord server to a Minecraft server using an invitation token",
@@ -65,6 +67,7 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 		},
 	}
 
+	// 管理者専用コマンド (指定ギルドのみ)
 	adminCommands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "invite-create",
@@ -80,19 +83,17 @@ func RegisterCommands(s *discordgo.Session, guildID string) {
 		},
 	}
 
-	for _, v := range commands {
-		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", v)
-		if err != nil {
-			log.Panicf("Cannot create '%v' command: %v", v.Name, err)
-		}
+	// グローバルコマンドを一括登録 (これに含まれない既存のグローバルコマンドは削除される)
+	_, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, "", globalCommands)
+	if err != nil {
+		log.Printf("Error overwriting global commands: %v", err)
 	}
 
+	// 管理者コマンドをギルドに登録
 	if guildID != "" {
-		for _, v := range adminCommands {
-			_, err := s.ApplicationCommandCreate(s.State.User.ID, AdminGuildID, v)
-			if err != nil {
-				log.Printf("Cannot create admin command '%v': %v", v.Name, err)
-			}
+		_, err := s.ApplicationCommandBulkOverwrite(s.State.User.ID, guildID, adminCommands)
+		if err != nil {
+			log.Printf("Error overwriting admin commands: %v", err)
 		}
 	}
 }
