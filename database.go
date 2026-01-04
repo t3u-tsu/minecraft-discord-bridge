@@ -66,6 +66,11 @@ func InitDB(path string) (*Database, error) {
 		}
 	}
 
+	// --- 既存の NULL データを空文字列にクリーンアップ ---
+	_, _ = db.Exec("UPDATE invitations SET name = '' WHERE name IS NULL")
+	_, _ = db.Exec("UPDATE links SET management_role_id = '' WHERE management_role_id IS NULL")
+	_, _ = db.Exec("UPDATE links SET allowed_channel_id = '' WHERE allowed_channel_id IS NULL")
+
 	return &Database{db: db}, nil
 }
 

@@ -327,9 +327,14 @@ func handleTokenCommands(s *discordgo.Session, i *discordgo.InteractionCreate, d
 	}
 
 	sub := i.ApplicationCommandData().Options[0]
+	log.Printf("[DISCORD] Handling '/token %s' command", sub.Name)
 	cmdText := ""
 	switch sub.Name {
 	case "create":
+		if len(sub.Options) < 2 {
+			respondWithError(s, i, "Missing arguments.")
+			return
+		}
 		cmdText = fmt.Sprintf("invite-create %s %s", sub.Options[0].StringValue(), sub.Options[1].StringValue())
 	case "list":
 		cmdText = "invite-list"
@@ -339,8 +344,10 @@ func handleTokenCommands(s *discordgo.Session, i *discordgo.InteractionCreate, d
 
 	resp, err := ProcessCommand(cmdText, db, cfg)
 	if err != nil {
+		log.Printf("[DISCORD] Error processing token command: %v", err)
 		respondWithError(s, i, err.Error())
 	} else {
+		log.Printf("[DISCORD] Successfully processed token command")
 		respondWithSuccess(s, i, resp)
 	}
 }
