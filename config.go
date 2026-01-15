@@ -42,13 +42,7 @@ func LoadConfig(path string) (*Config, error) {
 
 	// 環境変数による上書き (sops-nix 対応)
 	if envToken := os.Getenv("DISCORD_TOKEN"); envToken != "" {
-	if envAdmin := os.Getenv("DISCORD_ADMIN_GUILD_ID"); envAdmin != "" {
-		config.Discord.AdminGuildID = envAdmin
-	}
 		config.Discord.Token = envToken
-	if envAdmin := os.Getenv("DISCORD_ADMIN_GUILD_ID"); envAdmin != "" {
-		config.Discord.AdminGuildID = envAdmin
-	}
 	}
 	if envAdmin := os.Getenv("DISCORD_ADMIN_GUILD_ID"); envAdmin != "" {
 		config.Discord.AdminGuildID = envAdmin

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -68,6 +69,7 @@ func DialRCON(network, address, password string) (*RCONClient, error) {
 
 	// Authenticate
 	if err := client.authenticate(password); err != nil {
+		log.Printf("[RCON] Authentication failed for %s: %v", address, err)
 		conn.Close()
 		return nil, err
 	}
@@ -78,11 +80,11 @@ func DialRCON(network, address, password string) (*RCONClient, error) {
 func (c *RCONClient) authenticate(password string) error {
 	respID, _, err := c.send(RCON_AUTH, password)
 	if err != nil {
-		return err
+		return fmt.Errorf("auth send error: %w", err)
 	}
 
 	if respID == -1 {
-		return errors.New("RCON authentication failed")
+		return errors.New("authentication failed (invalid password)")
 	}
 
 	return nil
@@ -90,7 +92,10 @@ func (c *RCONClient) authenticate(password string) error {
 
 func (c *RCONClient) Execute(command string) (string, error) {
 	_, payload, err := c.send(RCON_COMMAND, command)
-	return payload, err
+	if err != nil {
+		return "", fmt.Errorf("execute error: %w", err)
+	}
+	return payload, nil
 }
 
 func (c *RCONClient) send(packetType int32, payload string) (int32, string, error) {
@@ -109,23 +114,37 @@ func (c *RCONClient) send(packetType int32, payload string) (int32, string, erro
 		return 0, "", err
 	}
 
-	// Read response
-	header := make([]byte, 12)
-	if _, err := io.ReadFull(c.conn, header); err != nil {
-		return 0, "", err
+	// Read header (size)
+	sizeBuf := make([]byte, 4)
+	if _, err := io.ReadFull(c.conn, sizeBuf); err != nil {
+		return 0, "", fmt.Errorf("failed to read size: %w", err)
 	}
 
-	var resSize, resID, resType int32
-	binary.Read(bytes.NewReader(header[0:4]), binary.LittleEndian, &resSize)
-	binary.Read(bytes.NewReader(header[4:8]), binary.LittleEndian, &resID)
-	binary.Read(bytes.NewReader(header[8:12]), binary.LittleEndian, &resType)
+	var resSize int32
+	binary.Read(bytes.NewReader(sizeBuf), binary.LittleEndian, &resSize)
 
-	data := make([]byte, resSize-8)
-	if _, err := io.ReadFull(c.conn, data); err != nil {
-		return 0, "", err
+	if resSize < 10 || resSize > 4096 {
+		return 0, "", fmt.Errorf("invalid response size: %d", resSize)
 	}
 
-	return resID, string(data[:len(data)-2]), nil
+	// Read rest of the packet
+	rest := make([]byte, resSize)
+	if _, err := io.ReadFull(c.conn, rest); err != nil {
+		return 0, "", fmt.Errorf("failed to read packet body: %w", err)
+	}
+
+	var resID, resType int32
+	binary.Read(bytes.NewReader(rest[0:4]), binary.LittleEndian, &resID)
+	binary.Read(bytes.NewReader(rest[4:8]), binary.LittleEndian, &resType)
+
+	// Payload is from rest[8] to the first null byte
+	data := rest[8:]
+	nullIdx := bytes.IndexByte(data, 0)
+	if nullIdx != -1 {
+		data = data[:nullIdx]
+	}
+
+	return resID, string(data), nil
 }
 
 func (c *RCONClient) Close() {

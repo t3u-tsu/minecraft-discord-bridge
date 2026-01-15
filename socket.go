@@ -94,6 +94,7 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 		if action == "list" {
 			client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
 			if err != nil {
+				log.Printf("[CORE] RCON Connection failed for %s: %v", srvName, err)
 				return "", err
 			}
 			defer client.Close()
@@ -111,11 +112,13 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			}
 			if !strings.HasPrefix(username, ".") {
 				if _, err := ResolveUUID(username); err != nil {
+					log.Printf("[CORE] UUID resolution failed for %s: %v", username, err)
 					return fmt.Sprintf("Error: UUID resolution failed: %v", err), nil
 				}
 			}
 			client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
 			if err != nil {
+				log.Printf("[CORE] RCON Connection failed for %s: %v", srvName, err)
 				return "", err
 			}
 			defer client.Close()
@@ -128,10 +131,12 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 			}
 			data, err := os.ReadFile(srvCfg.WhitelistPath)
 			if err != nil {
+				log.Printf("[CORE] Failed to read whitelist file: %v", err)
 				return fmt.Sprintf("Error reading whitelist: %v", err), nil
 			}
 			var list []WhitelistEntry
 			if err := json.Unmarshal(data, &list); err != nil {
+				log.Printf("[CORE] Failed to parse whitelist JSON: %v", err)
 				return fmt.Sprintf("Error parsing whitelist: %v", err), nil
 			}
 
@@ -150,11 +155,13 @@ func ProcessCommand(input string, db *Database, cfg *Config) (string, error) {
 
 			newData, _ := json.MarshalIndent(newList, "", "  ")
 			if err := os.WriteFile(srvCfg.WhitelistPath, newData, 0644); err != nil {
+				log.Printf("[CORE] Failed to write whitelist file: %v", err)
 				return fmt.Sprintf("Error writing whitelist: %v", err), nil
 			}
 
 			client, err := DialRCON(srvCfg.Network, srvCfg.Address, srvCfg.Password)
 			if err != nil {
+				log.Printf("[CORE] RCON Connection failed for %s: %v", srvName, err)
 				return "", err
 			}
 			defer client.Close()
